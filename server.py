@@ -143,7 +143,70 @@ def login_doctor():
         return jsonify({"error": "Doctor not found"}), 404
 
 
-    
+# delete a doctor
+@app.route('/doctor/<int:doctor_id>', methods=['DELETE'])
+def delete_doctor(doctor_id):
+    cursor = mysql.connection.cursor()
+
+    # check if the doctor exists
+    cursor.execute("SELECT * FROM DOCTOR WHERE doctor_id = %s", (doctor_id,))
+    doctor = cursor.fetchone()
+
+    if not doctor:
+        return jsonify({"error": "Doctor not found"}), 404
+
+    # delete the doctor
+    cursor.execute("DELETE FROM DOCTOR WHERE doctor_id = %s", (doctor_id,))
+    mysql.connection.commit()
+
+    return jsonify({"message": f"Doctor with ID {doctor_id} has been deleted."}), 200
+
+
+# get the list of doctors
+@app.route('/doctors', methods=['GET'])
+def get_all_doctors():
+    cursor = mysql.connection.cursor()
+    query = """
+        SELECT doctor_id, first_name, last_name, email, description, license_num,
+               license_exp_date, dob, years_of_practice, payment_fee,
+               gender, phone_number, address, zipcode, city, state, doctor_picture,
+               created_at, updated_at
+        FROM DOCTOR
+    """
+    cursor.execute(query)
+    doctors = cursor.fetchall()
+
+    result = []
+    for doc in doctors:
+        doctor_picture = doc[16]
+        if doctor_picture:
+            if isinstance(doctor_picture, str):
+                doctor_picture = doctor_picture.encode('utf-8')
+            doctor_picture = base64.b64encode(doctor_picture).decode('utf-8')
+
+        result.append({
+            "doctor_id": doc[0],
+            "first_name": doc[1],
+            "last_name": doc[2],
+            "email": doc[3],
+            "description": doc[4],
+            "license_num": doc[5],
+            "license_exp_date": doc[6],
+            "dob": doc[7],
+            "years_of_practice": doc[8],
+            "payment_fee": doc[9],
+            "gender": doc[10],
+            "phone_number": doc[11],
+            "address": doc[12],
+            "zipcode": doc[13],
+            "city": doc[14],
+            "state": doc[15],
+            "doctor_picture": doctor_picture
+        })
+
+    return jsonify(result), 200
+
+
 # update doctor info
 
 #------- PHARMACY RELATED QUERIES -----------------------------------------

@@ -19,6 +19,7 @@ app.config['MYSQL_DB'] = 'clinic_db'
 mysql = MySQL(app)
 
 #------- DOCTOR RELATED QUERIES -----------------------------------------
+
 # register a new doctor
 @app.route('/register-doctor', methods=['POST'])
 def register_doctor():
@@ -144,6 +145,8 @@ def login_doctor():
 # update doctor info
 
 #------- PHARMACY RELATED QUERIES -----------------------------------------
+
+#register a pharmacy
 @app.route('/register-pharmacy', methods=['POST'])
 def register_pharmacy():
     data = request.get_json()
@@ -176,10 +179,47 @@ def register_pharmacy():
     except Exception as e:
         mysql.connection.rollback()
         return jsonify({"error": str(e)}), 400
+    
+# get the pharmacy info
+@app.route('/pharmacy/<int:pharmacy_id>', methods=['GET'])
+def get_pharmacy(pharmacy_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT 
+            pharmacy_id,
+            pharmacy_name,
+            email,
+            address,
+            zipcode,
+            city,
+            state,
+            store_hours
+        FROM PHARMACY
+        WHERE pharmacy_id = %s
+    """
+
+    try:
+        cursor.execute(query, (pharmacy_id,))
+        result = cursor.fetchone()
+
+        if result:
+            keys = [
+                'pharmacy_id', 'pharmacy_name', 'email', 'address',
+                'zipcode', 'city', 'state', 'store_hours'
+            ]
+            pharmacy_info = dict(zip(keys, result))
+            return jsonify(pharmacy_info), 200
+        else:
+            return jsonify({"error": "Pharmacy not found"}), 404
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
 
 #------- PATIENT RELATED QUERIES -----------------------------------------
 
-# STILL IN PROGRESS - basic info registration 
+# basic info registration
 @app.route('/register-patient', methods=['POST'])
 def register_patient():
     data = request.get_json()
@@ -189,27 +229,216 @@ def register_patient():
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
     cursor = mysql.connection.cursor()
-    query = """
-        INSERT INTO PATIENT (
-            doctor_id, patient_email, patient_password, first_name, last_name,
-            pharmacy_id
-        ) VALUES (%s, %s, %s, %s, %s, %s)
+
+    # Find the pharmacy by name, address, and zipcode
+    find_pharmacy_query = """
+        SELECT pharmacy_id FROM PHARMACY
+        WHERE pharmacy_name = %s AND address = %s AND zipcode = %s
     """
-    values = (
-        data['doctor_id'],  # Foreign key to DOCTOR table
+    pharmacy_values = (
+        data['pharmacy_name'],
+        data['pharmacy_address'],
+        data['pharmacy_zipcode']
+    )
+
+    cursor.execute(find_pharmacy_query, pharmacy_values)
+    pharmacy = cursor.fetchone()
+
+    if pharmacy:
+        pharmacy_id = pharmacy[0]
+    else:
+        return jsonify({"error": "Pharmacy not found. Please register the pharmacy first."}), 400
+
+    # Insert the patient with the new insurance-related fields
+    insert_patient_query = """
+        INSERT INTO PATIENT (
+            patient_email, patient_password, first_name, last_name,
+            pharmacy_id, insurance_provider, insurance_policy_number, insurance_expiration_date
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    patient_values = (
         data['patient_email'],
         hashed_password,
         data['first_name'],
         data['last_name'],
-        data['pharmacy_id'],  # Foreign key to PHARMACY table
+        pharmacy_id,
+        data.get('insurance_provider'),  
+        data.get('insurance_policy_number'),  
+        data.get('insurance_expiration_date')  
     )
 
     try:
-        cursor.execute(query, values)
+        cursor.execute(insert_patient_query, patient_values)
         mysql.connection.commit()
         return jsonify({"message": "Patient registered successfully!"}), 201
     except Exception as e:
         mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+
+
+    
+# used for a patient to select their doctor
+@app.route('/select-doctor', methods=['POST'])
+def select_doctor():
+    data = request.get_json()
+
+    cursor = mysql.connection.cursor()
+
+    update_query = """
+        UPDATE PATIENT
+        SET doctor_id = %s
+        WHERE patient_id = %s
+    """
+    values = (
+        data['doctor_id'],
+        data['patient_id']
+    )
+
+    try:
+        cursor.execute(update_query, values)
+        mysql.connection.commit()
+        return jsonify({"message": "Doctor assigned successfully!"}), 200
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+    
+# get patient basic info
+@app.route('/patient/<int:patient_id>', methods=['GET'])
+def get_patient(patient_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT 
+            patient_id,
+            patient_email,
+            first_name,
+            last_name,
+            doctor_id,
+            pharmacy_id,
+            doctor_rating,
+            profile_pic,
+            insurance_provider,
+            insurance_policy_number,
+            insurance_expiration_date
+        FROM PATIENT
+        WHERE patient_id = %s
+    """
+
+    try:
+        cursor.execute(query, (patient_id,))
+        result = cursor.fetchone()
+
+        if result:
+            keys = [
+                'patient_id', 'patient_email', 'first_name', 'last_name',
+                'doctor_id', 'pharmacy_id', 'doctor_rating', 'profile_pic',
+                'insurance_provider', 'insurance_policy_number', 'insurance_expiration_date'
+            ]
+            patient_info = dict(zip(keys, result))
+            return jsonify(patient_info), 200
+        else:
+            return jsonify({"error": "Patient not found"}), 404
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+# add initial survey info to db
+@app.route('/init-patient-survey', methods=['POST'])
+def init_patient_survey():
+    data = request.get_json()
+    cursor = mysql.connection.cursor()
+
+    insert_query = """
+        INSERT INTO PATIENT_INIT_SURVEY (
+            patient_id,
+            mobile_number,
+            dob,
+            gender,
+            height,
+            weight,
+            allergies,
+            blood_type,
+            patient_address,
+            patient_zipcode,
+            patient_city,
+            patient_state,
+            medical_conditions,
+            family_history,
+            past_procedures
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """
+
+    values = (
+        data['patient_id'],
+        data['mobile_number'],
+        data['dob'],
+        data.get('gender'),
+        data.get('height'),
+        data.get('weight'),
+        data.get('allergies'),
+        data['blood_type'],  
+        data['patient_address'],
+        data['patient_zipcode'],
+        data['patient_city'],
+        data['patient_state'],
+        data.get('medical_conditions'),
+        data.get('family_history'),
+        data.get('past_procedures')
+    )
+
+    try:
+        cursor.execute(insert_query, values)
+        mysql.connection.commit()
+        print("Blood Type: ", data['blood_type'])
+        return jsonify({"message": "Patient survey submitted successfully!"}), 201
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+
+# get init survey info
+@app.route('/init-patient-survey/<int:patient_id>', methods=['GET'])
+def get_patient_init_survey(patient_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT 
+            is_id,
+            patient_id,
+            mobile_number,
+            dob,
+            gender,
+            height,
+            weight,
+            allergies,
+            blood_type,
+            patient_address,
+            patient_zipcode,
+            patient_city,
+            patient_state,
+            medical_conditions,
+            family_history,
+            past_procedures
+        FROM PATIENT_INIT_SURVEY
+        WHERE patient_id = %s
+    """
+
+    try:
+        cursor.execute(query, (patient_id,))
+        result = cursor.fetchone()
+
+        if result:
+            keys = [
+                'is_id', 'patient_id', 'mobile_number', 'dob', 'gender',
+                'height', 'weight', 'allergies', 'blood_type', 'patient_address',
+                'patient_zipcode', 'patient_city', 'patient_state', 'medical_conditions',
+                'family_history', 'past_procedures'
+            ]
+            survey_info = dict(zip(keys, result))
+            return jsonify(survey_info), 200
+        else:
+            return jsonify({"error": "Patient survey not found"}), 404
+
+    except Exception as e:
         return jsonify({"error": str(e)}), 400
 
 

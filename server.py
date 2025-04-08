@@ -127,12 +127,12 @@ def login_doctor():
     cursor = mysql.connection.cursor()
 
     # Query to fetch doctor details based on email
-    query = "SELECT doctor_id, first_name, last_name, email, password FROM DOCTOR WHERE email = %s"
+    query = "SELECT doctor_id, email, password FROM DOCTOR WHERE email = %s"
     cursor.execute(query, (email,))
     doctor = cursor.fetchone()
 
     if doctor:
-        stored_password = doctor[4]  # Get the stored hashed password
+        stored_password = doctor[2]  # Get the stored hashed password (3rd field in query result)
         
         # Check if entered password matches the stored password
         if bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8')):
@@ -141,6 +141,8 @@ def login_doctor():
             return jsonify({"error": "Invalid credentials"}), 401
     else:
         return jsonify({"error": "Doctor not found"}), 404
+
+
     
 # update doctor info
 
@@ -440,6 +442,31 @@ def get_patient_init_survey(patient_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+# patient login
+@app.route('/login-patient', methods=['POST'])
+def login_patient():
+    data = request.get_json()
+    email = data.get('email')
+    password = data.get('password')
+
+    cursor = mysql.connection.cursor()
+
+    # Query to fetch patient details based on email
+    query = "SELECT patient_id, patient_password FROM PATIENT WHERE patient_email = %s"
+    cursor.execute(query, (email,))
+    patient = cursor.fetchone()
+
+    if patient:
+        stored_password = patient[1]  # Get the stored hashed password
+        
+        # Check if entered password matches the stored password
+        if bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8')):
+            return jsonify({"message": "Login successful", "patient_id": patient[0]}), 200
+        else:
+            return jsonify({"error": "Invalid credentials"}), 401
+    else:
+        return jsonify({"error": "Patient not found"}), 404
 
 
 #--------------------------------------------------------------------

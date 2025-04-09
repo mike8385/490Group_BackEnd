@@ -312,7 +312,7 @@ def register_patient():
     if pharmacy:
         pharmacy_id = pharmacy[0]
     else:
-        return jsonify({"error": "Pharmacy not found. Please register the pharmacy first."}), 400
+        return jsonify({"error": "Pharmacy not found bruh. Please register the pharmacy first."}), 400
 
     # Insert the patient with the new insurance-related fields
     insert_patient_query = """

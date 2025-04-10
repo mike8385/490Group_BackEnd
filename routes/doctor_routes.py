@@ -23,7 +23,7 @@ def register_doctor():
     query = """
         INSERT INTO DOCTOR (
             first_name, last_name, email, password, description, license_num,
-            license_exp_date, dob, years_of_practice, payment_fee,
+            license_exp_date, dob, med_school, years_of_practice, specialty, payment_fee,
             gender, phone_number, address, zipcode, city, state, doctor_picture
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
@@ -36,7 +36,9 @@ def register_doctor():
         data['license_num'],
         data['license_exp_date'],
         data['dob'],
+        data['med_school'],
         data['years_of_practice'],
+        data['specialty'],
         data['payment_fee'],
         data['gender'],
         data['phone_number'],
@@ -59,7 +61,7 @@ def get_doctor(doctor_id):
     cursor = mysql.connection.cursor()
     query = """
         SELECT doctor_id, first_name, last_name, email, description, license_num,
-               license_exp_date, dob, years_of_practice, payment_fee,
+               license_exp_date, dob, med_school, specialty, years_of_practice, payment_fee,
                gender, phone_number, address, zipcode, city, state, doctor_picture,
                created_at, updated_at
         FROM DOCTOR
@@ -69,12 +71,10 @@ def get_doctor(doctor_id):
     doctor = cursor.fetchone()
 
     if doctor:
-        
-        #the doctor picture thing may need to be edited- need to test it with frontend
-        doctor_picture = doctor[16]  
+        doctor_picture = doctor[18]  # Adjusted index due to added fields
         if doctor_picture:
             if isinstance(doctor_picture, str):
-                doctor_picture = doctor_picture.encode('utf-8')  # Ensure it's a bytes-like object
+                doctor_picture = doctor_picture.encode('utf-8')
             doctor_picture = base64.b64encode(doctor_picture).decode('utf-8')
 
         return jsonify({
@@ -86,14 +86,16 @@ def get_doctor(doctor_id):
             "license_num": doctor[5],
             "license_exp_date": doctor[6],
             "dob": doctor[7],
-            "years_of_practice": doctor[8],
-            "payment_fee": doctor[9],
-            "gender": doctor[10],
-            "phone_number": doctor[11],
-            "address": doctor[12],
-            "zipcode": doctor[13],
-            "city": doctor[14],
-            "state": doctor[15], 
+            "med_school": doctor[8],
+            "specialty": doctor[9],
+            "years_of_practice": doctor[10],
+            "payment_fee": doctor[11],
+            "gender": doctor[12],
+            "phone_number": doctor[13],
+            "address": doctor[14],
+            "zipcode": doctor[15],
+            "city": doctor[16],
+            "state": doctor[17],
             "doctor_picture": doctor_picture
         }), 200
     else:
@@ -145,7 +147,7 @@ def get_all_doctors():
     cursor = mysql.connection.cursor()
     query = """
         SELECT doctor_id, first_name, last_name, email, description, license_num,
-               license_exp_date, dob, years_of_practice, payment_fee,
+               license_exp_date, dob, med_school, specialty, years_of_practice, payment_fee,
                gender, phone_number, address, zipcode, city, state, doctor_picture,
                created_at, updated_at
         FROM DOCTOR
@@ -155,7 +157,7 @@ def get_all_doctors():
 
     result = []
     for doc in doctors:
-        doctor_picture = doc[16]
+        doctor_picture = doc[18]
         if doctor_picture:
             if isinstance(doctor_picture, str):
                 doctor_picture = doctor_picture.encode('utf-8')
@@ -170,14 +172,16 @@ def get_all_doctors():
             "license_num": doc[5],
             "license_exp_date": doc[6],
             "dob": doc[7],
-            "years_of_practice": doc[8],
-            "payment_fee": doc[9],
-            "gender": doc[10],
-            "phone_number": doc[11],
-            "address": doc[12],
-            "zipcode": doc[13],
-            "city": doc[14],
-            "state": doc[15],
+            "med_school": doc[8],
+            "specialty": doc[9],
+            "years_of_practice": doc[10],
+            "payment_fee": doc[11],
+            "gender": doc[12],
+            "phone_number": doc[13],
+            "address": doc[14],
+            "zipcode": doc[15],
+            "city": doc[16],
+            "state": doc[17],
             "doctor_picture": doctor_picture
         })
 

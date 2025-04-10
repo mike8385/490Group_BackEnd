@@ -1,4 +1,4 @@
-MYSQL_HOST = '129.153.161.248' # oracle public ip
-MYSQL_USER = 'groupuser'
-MYSQL_PASSWORD = 'grouppass'
+MYSQL_HOST = '127.0.0.1' # localhost
+MYSQL_USER = 'root'
+MYSQL_PASSWORD = 'toor'
 MYSQL_DB = 'clinic_db'

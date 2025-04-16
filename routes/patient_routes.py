@@ -7,7 +7,7 @@ patient_bp = Blueprint('patient_bp', __name__)
 @patient_bp.route('/register-patient', methods=['POST'])
 def register_patient():
     data = request.get_json()
-
+    print(data)
     # Hash the patient password before storing it
     password = data['patient_password']
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())

@@ -193,3 +193,24 @@ def update_stock():
     except Exception as e:
         mysql.connection.rollback()
         return jsonify({"error": str(e)}), 500
+    
+    #get all pharmacies
+@pharmacy_bp.route('/pharmacies', methods=['GET'])
+def get_pharmacies():
+    cursor = mysql.connection.cursor()
+    try:
+        cursor.execute("SELECT pharmacy_name, address, zipcode, city FROM PHARMACY")
+        rows = cursor.fetchall()
+
+        pharmacies = [
+            {
+                "name": row[0],
+                "address": row[1],
+                "zipcode": row[2],
+                "city": row[3]
+            } for row in rows
+        ]
+
+        return jsonify(pharmacies), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

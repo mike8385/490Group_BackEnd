@@ -414,5 +414,61 @@ def get_appointments(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+# get appt by patient id past
+@patient_bp.route('/appointments/<int:patient_id>', methods=['GET'])
+def get_all_appointments(patient_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT * FROM PATIENT_APPOINTMENT
+        WHERE patient_id = %s
+        ORDER BY appointment_datetime DESC
+    """
+
+    try:
+        cursor.execute(query, (patient_id,))
+        appointments = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        results = [dict(zip(columns, row)) for row in appointments]
+        return jsonify(results), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 
+@patient_bp.route('/appointmentsupcoming/<int:patient_id>', methods=['GET'])
+def get_upcoming_appointments(patient_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT * FROM PATIENT_APPOINTMENT
+        WHERE patient_id = %s AND appointment_datetime >= NOW()
+        ORDER BY appointment_datetime ASC
+    """
+
+    try:
+        cursor.execute(query, (patient_id,))
+        appointments = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        results = [dict(zip(columns, row)) for row in appointments]
+        return jsonify(results), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@patient_bp.route('/appointmentspast/<int:patient_id>', methods=['GET'])
+def get_past_appointments(patient_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT * FROM PATIENT_APPOINTMENT
+        WHERE patient_id = %s AND appointment_datetime < NOW()
+        ORDER BY appointment_datetime DESC
+    """
+
+    try:
+        cursor.execute(query, (patient_id,))
+        appointments = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        results = [dict(zip(columns, row)) for row in appointments]
+        return jsonify(results), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400

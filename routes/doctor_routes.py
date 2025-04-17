@@ -186,3 +186,64 @@ def get_all_doctors():
         })
 
     return jsonify(result), 200
+
+# get appointments by doctor
+@doctor_bp.route('/doc-appointments/<int:doctor_id>', methods=['GET'])
+def get_appointments_by_doctor(doctor_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT 
+            pa.patient_appt_id,
+            pa.patient_id,
+            pa.appointment_datetime,
+            pa.reason_for_visit,
+            pa.current_medications,
+            pa.exercise_frequency,
+            pa.doctor_appointment_note,
+            pa.accepted,
+            pa.meal_prescribed,
+            pa.created_at,
+            pa.updated_at,
+            p.first_name AS patient_first_name,
+            p.last_name AS patient_last_name
+        FROM PATIENT_APPOINTMENT pa
+        JOIN PATIENT p ON pa.patient_id = p.patient_id
+        WHERE p.doctor_id = %s
+        ORDER BY pa.appointment_datetime DESC
+    """
+
+    try:
+        cursor.execute(query, (doctor_id,))
+        appointments = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        results = [dict(zip(columns, row)) for row in appointments]
+        return jsonify(results), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    
+# doctor accepts an appointment [1], else deafult 0
+@doctor_bp.route('/doc-appointments-status/<int:appointment_id>', methods=['PATCH'])
+def update_appointment_status(appointment_id):
+    data = request.get_json()
+    new_status = data.get('accepted')
+
+    if new_status not in [0, 1]:
+        return jsonify({"error": "Invalid status. 'accepted' must be 0 (deny) or 1 (accept)."}), 400
+
+    cursor = mysql.connection.cursor()
+
+    query = """
+        UPDATE PATIENT_APPOINTMENT
+        SET accepted = %s, updated_at = CURRENT_TIMESTAMP
+        WHERE patient_appt_id = %s
+    """
+
+    try:
+        cursor.execute(query, (new_status, appointment_id))
+        mysql.connection.commit()
+        return jsonify({"message": "Appointment status updated successfully."}), 200
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+

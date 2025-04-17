@@ -1,4 +1,4 @@
-MYSQL_HOST = '127.0.0.1' # localhost
+MYSQL_HOST = '34.148.167.204' 
 MYSQL_USER = 'root'
-MYSQL_PASSWORD = 'toor'
+MYSQL_PASSWORD = 'root'
 MYSQL_DB = 'clinic_db'

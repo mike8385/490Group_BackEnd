@@ -6,12 +6,12 @@ services:
     container_name: group_mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: XFbhjuL2?
+      MYSQL_ROOT_PASSWORD: yourpassword
       MYSQL_DATABASE: clinic_db
       MYSQL_USER: groupuser
       MYSQL_PASSWORD: grouppass
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - db_data:/var/lib/mysql
 

@@ -135,7 +135,9 @@ def init_patient_survey():
             gender,
             height,
             weight,
-            allergies,
+            activity,
+            health_goals,
+            dietary_restrictions,
             blood_type,
             patient_address,
             patient_zipcode,
@@ -143,8 +145,9 @@ def init_patient_survey():
             patient_state,
             medical_conditions,
             family_history,
-            past_procedures
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            past_procedures,
+            favorite_meal
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
 
     values = (
@@ -154,21 +157,23 @@ def init_patient_survey():
         data.get('gender'),
         data.get('height'),
         data.get('weight'),
-        data.get('allergies'),
-        data['blood_type'],  
+        data.get('activity'),  # Changed from fitness
+        data.get('health_goals'),  # Changed from goal
+        data.get('dietary_restrictions'),  # Changed from allergies
+        data['blood_type'],
         data['patient_address'],
         data['patient_zipcode'],
         data['patient_city'],
         data['patient_state'],
         data.get('medical_conditions'),
-        data.get('family_history'),
-        data.get('past_procedures')
+        data.get('family_history', "None"),
+        data.get('past_procedures', "None"),
+        data.get('favorite_meal', "None")
     )
 
     try:
         cursor.execute(insert_query, values)
         mysql.connection.commit()
-        print("Blood Type: ", data['blood_type'])
         return jsonify({"message": "Patient survey submitted successfully!"}), 201
     except Exception as e:
         mysql.connection.rollback()
@@ -242,113 +247,3 @@ def login_patient():
             return jsonify({"error": "Invalid credentials"}), 401
     else:
         return jsonify({"error": "Patient not found"}), 404
-    
-# add to daily survey
-@patient_bp.route('/daily-survey', methods=['POST'])
-def add_daily_survey():
-    data = request.get_json()
-    cursor = mysql.connection.cursor()
-
-    insert_query = """
-        INSERT INTO PATIENT_DAILY_SURVEY (
-            patient_id,
-            date,
-            water_intake,
-            calories_consumed,
-            heart_rate,
-            exercise,
-            mood,
-            follow_plan
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-    """
-    
-    values = (
-        data['patient_id'],
-        data['date'],
-        data['water_intake'],
-        data['calories_consumed'],
-        data['heart_rate'],
-        data['exercise'],
-        data.get('mood'),
-        data.get('follow_plan', 0)
-    )
-
-    try:
-        cursor.execute(insert_query, values)
-        mysql.connection.commit()
-        return jsonify({"message": "Daily survey submitted successfully!"}), 201
-    except Exception as e:
-        mysql.connection.rollback()
-        return jsonify({"error": str(e)}), 400
-    
-# get daily survey
-@patient_bp.route('/daily-surveys/<int:patient_id>', methods=['GET'])
-def get_daily_surveys(patient_id):
-    cursor = mysql.connection.cursor()
-    
-    query = """
-        SELECT * FROM PATIENT_DAILY_SURVEY
-        WHERE patient_id = %s
-        ORDER BY date DESC
-    """
-    
-    try:
-        cursor.execute(query, (patient_id,))
-        surveys = cursor.fetchall()
-        columns = [desc[0] for desc in cursor.description]
-        results = [dict(zip(columns, row)) for row in surveys]
-        return jsonify(results), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-# add to weekly survey
-@patient_bp.route('/weekly-survey', methods=['POST'])
-def add_weekly_survey():
-    data = request.get_json()
-    cursor = mysql.connection.cursor()
-
-    insert_query = """
-        INSERT INTO PATIENT_WEEKLY (
-            patient_id,
-            week_start,
-            blood_pressure,
-            weight_change
-        ) VALUES (%s, %s, %s, %s)
-    """
-    
-    values = (
-        data['patient_id'],
-        data['week_start'],
-        data['blood_pressure'],
-        data['weight_change']
-    )
-
-    try:
-        cursor.execute(insert_query, values)
-        mysql.connection.commit()
-        return jsonify({"message": "Weekly survey submitted successfully!"}), 201
-    except Exception as e:
-        mysql.connection.rollback()
-        return jsonify({"error": str(e)}), 400
-
-# get weekly survey
-@patient_bp.route('/weekly-surveys/<int:patient_id>', methods=['GET'])
-def get_weekly_surveys(patient_id):
-    cursor = mysql.connection.cursor()
-
-    query = """
-        SELECT * FROM PATIENT_WEEKLY
-        WHERE patient_id = %s
-        ORDER BY week_start DESC
-    """
-
-    try:
-        cursor.execute(query, (patient_id,))
-        surveys = cursor.fetchall()
-        columns = [desc[0] for desc in cursor.description]
-        results = [dict(zip(columns, row)) for row in surveys]
-        return jsonify(results), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-

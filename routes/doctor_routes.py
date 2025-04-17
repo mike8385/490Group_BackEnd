@@ -221,3 +221,29 @@ def get_appointments_by_doctor(doctor_id):
         return jsonify(results), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+    
+# doctor accepts an appointment [1], else deafult 0
+@doctor_bp.route('/doc-appointments-status/<int:appointment_id>', methods=['PATCH'])
+def update_appointment_status(appointment_id):
+    data = request.get_json()
+    new_status = data.get('accepted')
+
+    if new_status not in [0, 1]:
+        return jsonify({"error": "Invalid status. 'accepted' must be 0 (deny) or 1 (accept)."}), 400
+
+    cursor = mysql.connection.cursor()
+
+    query = """
+        UPDATE PATIENT_APPOINTMENT
+        SET accepted = %s, updated_at = CURRENT_TIMESTAMP
+        WHERE patient_appt_id = %s
+    """
+
+    try:
+        cursor.execute(query, (new_status, appointment_id))
+        mysql.connection.commit()
+        return jsonify({"message": "Appointment status updated successfully."}), 200
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+

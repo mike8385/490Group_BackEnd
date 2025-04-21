@@ -224,6 +224,7 @@ def get_patient_init_survey(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+"""
 @patient_bp.route('/login-patient', methods=['POST'])
 def login_patient():
     data = request.get_json()
@@ -247,6 +248,24 @@ def login_patient():
             return jsonify({"error": "Invalid credentials"}), 401
     else:
         return jsonify({"error": "Patient not found"}), 404
+ """   
+@patient_bp.route('/login-patient', methods=['POST'])
+def login_patient():
+    data = request.get_json()
+    email = data.get('email')
+    # Ignoring password for testing
+
+    cursor = mysql.connection.cursor()
+
+    query = "SELECT patient_id FROM PATIENT WHERE patient_email = %s"
+    cursor.execute(query, (email,))
+    patient = cursor.fetchone()
+
+    if patient:
+        return jsonify({"message": "Login successful", "patient_id": patient[0]}), 200
+    else:
+        return jsonify({"error": "Patient not found"}), 404
+
     
 # add to daily survey
 @patient_bp.route('/daily-survey', methods=['POST'])
@@ -470,5 +489,23 @@ def get_past_appointments(patient_id):
         columns = [desc[0] for desc in cursor.description]
         results = [dict(zip(columns, row)) for row in appointments]
         return jsonify(results), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@patient_bp.route('/patient/<int:patient_id>/email', methods=['GET'])
+def get_patient_email(patient_id):
+    cursor = mysql.connection.cursor()
+
+    query = "SELECT patient_email FROM PATIENT WHERE patient_id = %s"
+
+    try:
+        cursor.execute(query, (patient_id,))
+        result = cursor.fetchone()
+
+        if result:
+            return jsonify({"patient_email": result[0]}), 200
+        else:
+            return jsonify({"error": "Patient not found"}), 404
+
     except Exception as e:
         return jsonify({"error": str(e)}), 400

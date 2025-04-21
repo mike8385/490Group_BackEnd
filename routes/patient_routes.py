@@ -7,7 +7,7 @@ patient_bp = Blueprint('patient_bp', __name__)
 @patient_bp.route('/register-patient', methods=['POST'])
 def register_patient():
     data = request.get_json()
-
+    print(data)
     # Hash the patient password before storing it
     password = data['patient_password']
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
@@ -135,7 +135,9 @@ def init_patient_survey():
             gender,
             height,
             weight,
-            allergies,
+            activity,
+            health_goals,
+            dietary_restrictions,
             blood_type,
             patient_address,
             patient_zipcode,
@@ -143,8 +145,9 @@ def init_patient_survey():
             patient_state,
             medical_conditions,
             family_history,
-            past_procedures
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            past_procedures,
+            favorite_meal
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
 
     values = (
@@ -154,21 +157,23 @@ def init_patient_survey():
         data.get('gender'),
         data.get('height'),
         data.get('weight'),
-        data.get('allergies'),
-        data['blood_type'],  
+        data.get('activity'),  # Changed from fitness
+        data.get('health_goals'),  # Changed from goal
+        data.get('dietary_restrictions'),  # Changed from allergies
+        data['blood_type'],
         data['patient_address'],
         data['patient_zipcode'],
         data['patient_city'],
         data['patient_state'],
         data.get('medical_conditions'),
-        data.get('family_history'),
-        data.get('past_procedures')
+        data.get('family_history', "None"),
+        data.get('past_procedures', "None"),
+        data.get('favorite_meal', "None")
     )
 
     try:
         cursor.execute(insert_query, values)
         mysql.connection.commit()
-        print("Blood Type: ", data['blood_type'])
         return jsonify({"message": "Patient survey submitted successfully!"}), 201
     except Exception as e:
         mysql.connection.rollback()
@@ -409,5 +414,61 @@ def get_appointments(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+# get appt by patient id past
+@patient_bp.route('/appointments/<int:patient_id>', methods=['GET'])
+def get_all_appointments(patient_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT * FROM PATIENT_APPOINTMENT
+        WHERE patient_id = %s
+        ORDER BY appointment_datetime DESC
+    """
+
+    try:
+        cursor.execute(query, (patient_id,))
+        appointments = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        results = [dict(zip(columns, row)) for row in appointments]
+        return jsonify(results), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 
+@patient_bp.route('/appointmentsupcoming/<int:patient_id>', methods=['GET'])
+def get_upcoming_appointments(patient_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT * FROM PATIENT_APPOINTMENT
+        WHERE patient_id = %s AND appointment_datetime >= NOW()
+        ORDER BY appointment_datetime ASC
+    """
+
+    try:
+        cursor.execute(query, (patient_id,))
+        appointments = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        results = [dict(zip(columns, row)) for row in appointments]
+        return jsonify(results), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@patient_bp.route('/appointmentspast/<int:patient_id>', methods=['GET'])
+def get_past_appointments(patient_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT * FROM PATIENT_APPOINTMENT
+        WHERE patient_id = %s AND appointment_datetime < NOW()
+        ORDER BY appointment_datetime DESC
+    """
+
+    try:
+        cursor.execute(query, (patient_id,))
+        appointments = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        results = [dict(zip(columns, row)) for row in appointments]
+        return jsonify(results), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400

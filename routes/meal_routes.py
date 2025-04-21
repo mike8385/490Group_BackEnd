@@ -88,6 +88,7 @@ def assign_meal_to_plan_entry():
         cursor.close()
 
 # grabs each meal plan entry based on the time of the day and day of the week
+# ex: /meal-plan-entries?meal_plan_id=1&day_of_week=Tuesday&meal_time=Breakfast
 @meal_bp.route('/meal-plan-entries', methods=['GET'])
 def get_meal_plan_entries_by_day_and_time():
     meal_plan_id = request.args.get('meal_plan_id')

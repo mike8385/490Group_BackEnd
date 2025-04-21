@@ -43,6 +43,7 @@ def get_all_meals():
     ]), 200
 
 # creates meal plan
+@meal_bp.route('/create-meal-plan', methods=['POST'])
 def create_meal_plan():
     data = request.get_json()
     meal_plan_name = data.get('meal_plan_name')

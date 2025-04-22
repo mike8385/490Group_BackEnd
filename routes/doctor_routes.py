@@ -148,7 +148,7 @@ def get_all_doctors():
     query = """
         SELECT doctor_id, first_name, last_name, email, description, license_num,
                license_exp_date, dob, med_school, specialty, years_of_practice, payment_fee,
-               gender, phone_number, address, zipcode, city, state, doctor_picture,
+               gender, phone_number, address, zipcode, city, state, doctor_picture, password,
                created_at, updated_at
         FROM DOCTOR
     """
@@ -182,7 +182,8 @@ def get_all_doctors():
             "zipcode": doc[15],
             "city": doc[16],
             "state": doc[17],
-            "doctor_picture": doctor_picture
+            "doctor_picture": doctor_picture,
+            "password": doc[19]
         })
 
     return jsonify(result), 200

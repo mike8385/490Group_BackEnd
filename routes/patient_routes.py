@@ -379,6 +379,9 @@ def get_weekly_surveys(patient_id):
 @patient_bp.route('/appointments', methods=['POST'])
 def add_appointment():
     data = request.get_json()
+    print("[DEBUG] Incoming data for appointment:")
+    print(data)
+
     cursor = mysql.connection.cursor()
 
     insert_query = """
@@ -393,25 +396,38 @@ def add_appointment():
             meal_prescribed
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
     """
+    # Lookup doctor_id for the current patient
+    cursor.execute("SELECT doctor_id FROM PATIENT WHERE patient_id = %s", (data['patient_id'],))
+    doctor_result = cursor.fetchone()
 
-    values = (
-        data['patient_id'],
-        data['appointment_datetime'],
-        data['reason_for_visit'],
-        data.get('current_medications'),
-        data.get('exercise_frequency'),
-        data.get('doctor_appointment_note'),
-        data.get('accepted', 0),
-        data.get('meal_prescribed')
-    )
+    doctor_id = doctor_result[0] if doctor_result else None
+    print("[DEBUG] Found doctor_id:", doctor_id)
+
 
     try:
+        values = (
+            data['patient_id'],
+            data['appointment_datetime'],
+            data['reason_for_visit'],
+            data.get('current_medications', ''),
+            data.get('exercise_frequency', ''),
+            data.get('doctor_appointment_note', ''),
+            data.get('accepted', 0),
+            data.get('meal_prescribed') or None
+
+        )
+        print("[DEBUG] Values to insert:", values)
+        print("[DEBUG] Executing query:", cursor.mogrify(insert_query, values))  # Log the exact SQL
+
+
         cursor.execute(insert_query, values)
         mysql.connection.commit()
         return jsonify({"message": "Appointment created successfully!"}), 201
     except Exception as e:
+        print("[ERROR] Exception while inserting appointment:", str(e))
         mysql.connection.rollback()
         return jsonify({"error": str(e)}), 400
+
 
 # get appt by patient id
 @patient_bp.route('/appointments/<int:patient_id>', methods=['GET'])

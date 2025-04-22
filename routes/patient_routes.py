@@ -365,6 +365,7 @@ def add_appointment():
     insert_query = """
         INSERT INTO PATIENT_APPOINTMENT (
             patient_id,
+            doctor_id,
             appointment_datetime,
             reason_for_visit,
             current_medications,
@@ -372,11 +373,12 @@ def add_appointment():
             doctor_appointment_note,
             accepted,
             meal_prescribed
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
 
     values = (
         data['patient_id'],
+        data['doctor_id'],
         data['appointment_datetime'],
         data['reason_for_visit'],
         data.get('current_medications'),

@@ -247,3 +247,38 @@ def update_appointment_status(appointment_id):
         mysql.connection.rollback()
         return jsonify({"error": str(e)}), 400
 
+# doctor adds a prescription for a patient
+@doctor_bp.route('/prescription/add', methods=['POST'])
+def add_prescription():
+    data = request.get_json()
+    patient_id = data.get('patient_id')
+    medicine_id = data.get('medicine_id')
+    quantity = data.get('quantity')
+
+    # Basic validation
+    if not all([patient_id, medicine_id, quantity]):
+        return jsonify({"error": "patient_id, medicine_id, and quantity are required."}), 400
+
+    if not isinstance(quantity, int) or quantity <= 0:
+        return jsonify({"error": "quantity must be a positive integer."}), 400
+
+    cursor = mysql.connection.cursor()
+
+    query = """
+        INSERT INTO PATIENT_PRESCRIPTION (
+            patient_id, medicine_id, quantity
+        ) VALUES (%s, %s, %s)
+    """
+    values = (patient_id, medicine_id, quantity)
+
+    try:
+        cursor.execute(query, values)
+        mysql.connection.commit()
+        return jsonify({"message": "Prescription added successfully."}), 201
+
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+
+    finally:
+        cursor.close()

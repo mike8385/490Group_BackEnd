@@ -194,7 +194,7 @@ def update_stock():
         mysql.connection.rollback()
         return jsonify({"error": str(e)}), 500
     
-    #get all pharmacies
+# get all pharmacies
 @pharmacy_bp.route('/pharmacies', methods=['GET'])
 def get_pharmacies():
     cursor = mysql.connection.cursor()
@@ -214,3 +214,35 @@ def get_pharmacies():
         return jsonify(pharmacies), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+# update a patient's prescription to filled if filled is clicked
+@pharmacy_bp.route('/prescription/fill', methods=['PUT'])
+def fill_prescription():
+    data = request.get_json()
+    prescription_id = data.get('prescription_id')
+
+    if not isinstance(prescription_id, int):
+        return jsonify({"error": "prescription_id must be an integer."}), 400
+
+    cursor = mysql.connection.cursor()
+
+    query = """
+        UPDATE PATIENT_PRESCRIPTION
+        SET filled = 1
+        WHERE prescription_id = %s
+    """
+
+    try:
+        cursor.execute(query, (prescription_id,))
+        mysql.connection.commit()
+        return jsonify({"message": "Prescription marked as filled successfully."}), 200
+
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+
+    finally:
+        cursor.close()
+
+
+    

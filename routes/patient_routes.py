@@ -328,10 +328,7 @@ def get_patient_init_survey(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-<<<<<<< HEAD
-=======
 """
->>>>>>> 48c08685ba0ff846488cba0ce7fce79d68bee19e
 @patient_bp.route('/login-patient', methods=['POST'])
 def login_patient():
     data = request.get_json()
@@ -365,19 +362,10 @@ def login_patient():
                 else:
                     return jsonify({"error": "Invalid credentials"}), 401
         else:
-<<<<<<< HEAD
-            return jsonify({"error": "Patient not found"}), 404
-
-    finally:
-        cursor.close()
-
-
-=======
             return jsonify({"error": "Invalid credentials"}), 401
     else:
         return jsonify({"error": "Patient not found"}), 404
 """
->>>>>>> 48c08685ba0ff846488cba0ce7fce79d68bee19e
 
 @patient_bp.route('/login-patient', methods=['POST'])
 def login_patient():

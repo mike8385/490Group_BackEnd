@@ -429,7 +429,7 @@ def get_daily_surveys(patient_id):
     query = """
         SELECT * FROM PATIENT_DAILY_SURVEY
         WHERE patient_id = %s
-        ORDER BY date DESC
+        ORDER BY date ASC
     """
     
     try:
@@ -894,3 +894,49 @@ def remove_patient_doctor(patient_id):
 
     finally:
         cursor.close()
+
+@patient_bp.route('/single_appointment/<int:appointment_id>', methods=['GET'])
+def get_single_appointment_by_id(appointment_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT 
+    PA.*, 
+    P.first_name AS patient_name, 
+    D.first_name AS doctor_name,
+    S.mobile_number,
+    S.dob,
+    S.gender AS survey_gender,
+    S.height AS survey_height,
+    S.weight AS survey_weight,
+    S.activity,
+    S.health_goals,
+    S.dietary_restrictions,
+    S.blood_type,
+    S.patient_address,
+    S.patient_zipcode,
+    S.patient_city,
+    S.patient_state,
+    S.medical_conditions,
+    S.family_history,
+    S.past_procedures,
+    S.favorite_meal
+FROM PATIENT_APPOINTMENT PA
+JOIN PATIENT P ON PA.patient_id = P.patient_id
+JOIN DOCTOR D ON PA.doctor_id = D.doctor_id
+LEFT JOIN PATIENT_INIT_SURVEY S ON P.patient_id = S.patient_id
+WHERE PA.patient_appt_id = %s
+
+    """
+
+    try:
+        cursor.execute(query, (appointment_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"error": "Appointment not found"}), 404
+        
+        columns = [desc[0] for desc in cursor.description]
+        result = dict(zip(columns, row))
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400

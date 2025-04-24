@@ -328,7 +328,6 @@ def get_patient_init_survey(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-
 @patient_bp.route('/login-patient', methods=['POST'])
 def login_patient():
     data = request.get_json()
@@ -337,21 +336,37 @@ def login_patient():
 
     cursor = mysql.connection.cursor()
 
-    # Query to fetch patient details based on email
-    query = "SELECT patient_id, patient_password FROM PATIENT WHERE patient_email = %s"
-    cursor.execute(query, (email,))
-    patient = cursor.fetchone()
+    try:
+        # Step 1: Get all emails from the first 351 entries
+        cursor.execute("SELECT patient_email FROM PATIENT ORDER BY patient_id ASC LIMIT 351")
+        test_emails = set(row[0] for row in cursor.fetchall())
 
-    if patient:
-        stored_password = patient[1]  # Get the stored hashed password
-        
-        # Check if entered password matches the stored password
-        if bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8')):
-            return jsonify({"message": "Login successful", "patient_id": patient[0]}), 200
+        # Step 2: Get patient info by email
+        cursor.execute("SELECT patient_id, patient_password FROM PATIENT WHERE patient_email = %s", (email,))
+        patient = cursor.fetchone()
+
+        if patient:
+            patient_id, stored_password = patient
+
+            if email in test_emails:
+                # Password is in plain text
+                if password == stored_password:
+                    return jsonify({"message": "Login successful (legacy plain text)", "patient_id": patient_id}), 200
+                else:
+                    return jsonify({"error": "Invalid credentials"}), 401
+            else:
+                # Password is hashed
+                if bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8')):
+                    return jsonify({"message": "Login successful", "patient_id": patient_id}), 200
+                else:
+                    return jsonify({"error": "Invalid credentials"}), 401
         else:
-            return jsonify({"error": "Invalid credentials"}), 401
-    else:
-        return jsonify({"error": "Patient not found"}), 404
+            return jsonify({"error": "Patient not found"}), 404
+
+    finally:
+        cursor.close()
+
+
 
 @patient_bp.route('/login-patient', methods=['POST'])
 def login_patient():
@@ -769,41 +784,85 @@ def add_patient_bill():
     finally:
         cursor.close()
 
-# get a patient's bill
-@patient_bp.route('/patient/<int:appt_id>/bill', methods=['GET'])
-def get_patient_bill(appt_id):
+# # get a patient's bill
+# @patient_bp.route('/patient/<int:appt_id>/bill', methods=['GET'])
+# def get_patient_bill(appt_id):
+#     cursor = mysql.connection.cursor()
+
+#     query = """
+#         SELECT bill_id, appt_id, doctor_bill, pharm_bill, charge, credit, current_bill, created_at
+#         FROM PATIENT_BILL
+#         WHERE appt_id = %s
+#     """
+
+#     try:
+#         cursor.execute(query, (appt_id,))
+#         result = cursor.fetchone()
+
+#         if not result:
+#             return jsonify({"error": "Bill not found for this appointment."}), 404
+
+#         bill = {
+#             "bill_id": result[0],
+#             "appt_id": result[1],
+#             "doctor_bill": float(result[2]),
+#             "pharm_bill": float(result[3]),
+#             "charge": float(result[4]),
+#             "credit": float(result[5]),
+#             "current_bill": float(result[6]),
+#             "created_at": result[7].isoformat()
+#         }
+
+#         return jsonify(bill), 200
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 400
+#     finally:
+#         cursor.close()
+
+@patient_bp.route('/patient/<int:patient_id>/bills', methods=['GET'])
+def get_all_bills_for_patient(patient_id):
     cursor = mysql.connection.cursor()
 
     query = """
-        SELECT bill_id, appt_id, doctor_bill, pharm_bill, charge, credit, current_bill, created_at
-        FROM PATIENT_BILL
-        WHERE appt_id = %s
+        SELECT 
+            pb.bill_id, pb.appt_id, pb.doctor_bill, pb.pharm_bill, pb.charge, 
+            pb.credit, pb.current_bill, pb.created_at
+        FROM 
+            PATIENT_BILL pb
+        JOIN 
+            PATIENT_APPOINTMENT pa ON pb.appt_id = pa.patient_appt_id
+        WHERE 
+            pa.patient_id = %s
+        ORDER BY 
+            pb.created_at DESC
     """
 
     try:
-        cursor.execute(query, (appt_id,))
-        result = cursor.fetchone()
+        cursor.execute(query, (patient_id,))
+        results = cursor.fetchall()
 
-        if not result:
-            return jsonify({"error": "Bill not found for this appointment."}), 404
+        if not results:
+            return jsonify({"message": "No bills found for this patient."}), 200
 
-        bill = {
-            "bill_id": result[0],
-            "appt_id": result[1],
-            "doctor_bill": float(result[2]),
-            "pharm_bill": float(result[3]),
-            "charge": float(result[4]),
-            "credit": float(result[5]),
-            "current_bill": float(result[6]),
-            "created_at": result[7].isoformat()
-        }
+        bills = []
+        for row in results:
+            bills.append({
+                "bill_id": row[0],
+                "appt_id": row[1],
+                "doctor_bill": float(row[2]),
+                "pharm_bill": float(row[3]),
+                "charge": float(row[4]),
+                "credit": float(row[5]),
+                "current_bill": float(row[6]),
+                "created_at": row[7].isoformat()
+            })
 
-        return jsonify(bill), 200
+        return jsonify(bills), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 400
     finally:
         cursor.close()
-
 
 
 @patient_bp.route('/remove_doctor/<int:patient_id>', methods=['PUT'])

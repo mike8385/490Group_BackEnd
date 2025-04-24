@@ -328,7 +328,7 @@ def get_patient_init_survey(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-
+"""
 @patient_bp.route('/login-patient', methods=['POST'])
 def login_patient():
     data = request.get_json()

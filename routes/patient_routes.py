@@ -352,6 +352,7 @@ def login_patient():
             return jsonify({"error": "Invalid credentials"}), 401
     else:
         return jsonify({"error": "Patient not found"}), 404
+"""
 
 @patient_bp.route('/login-patient', methods=['POST'])
 def login_patient():

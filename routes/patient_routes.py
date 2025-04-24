@@ -58,6 +58,108 @@ def register_patient():
     except Exception as e:
         mysql.connection.rollback()
         return jsonify({"error": str(e)}), 400
+    
+# register patient + init survey combined
+@patient_bp.route('/register-patient-with-survey', methods=['POST'])
+def register_patient_with_survey():
+    data = request.get_json()
+    cursor = mysql.connection.cursor()
+
+    try:
+        # hash the password ---
+        password = data['patient_password']
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+
+        # Get pharmacy ID ---
+        find_pharmacy_query = """
+            SELECT pharmacy_id FROM PHARMACY
+            WHERE pharmacy_name = %s AND address = %s AND zipcode = %s
+        """
+        pharmacy_values = (
+            data['pharmacy_name'],
+            data['pharmacy_address'],
+            data['pharmacy_zipcode']
+        )
+        cursor.execute(find_pharmacy_query, pharmacy_values)
+        pharmacy = cursor.fetchone()
+
+        if not pharmacy:
+            return jsonify({"error": "Pharmacy not found. Please register the pharmacy first."}), 400
+        pharmacy_id = pharmacy[0]
+
+        # Insert patient ---
+        insert_patient_query = """
+            INSERT INTO PATIENT (
+                patient_email, patient_password, first_name, last_name,
+                pharmacy_id, insurance_provider, insurance_policy_number, insurance_expiration_date
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        patient_values = (
+            data['patient_email'],
+            hashed_password,
+            data['first_name'],
+            data['last_name'],
+            pharmacy_id,
+            data.get('insurance_provider'),
+            data.get('insurance_policy_number'),
+            data.get('insurance_expiration_date')
+        )
+        cursor.execute(insert_patient_query, patient_values)
+
+        # Get the newly inserted patient's ID
+        patient_id = cursor.lastrowid
+
+        # Insert initial survey ---
+        insert_survey_query = """
+            INSERT INTO PATIENT_INIT_SURVEY (
+                patient_id,
+                mobile_number,
+                dob,
+                gender,
+                height,
+                weight,
+                activity,
+                health_goals,
+                dietary_restrictions,
+                blood_type,
+                patient_address,
+                patient_zipcode,
+                patient_city,
+                patient_state,
+                medical_conditions,
+                family_history,
+                past_procedures
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        survey_values = (
+            patient_id,
+            data['mobile_number'],
+            data['dob'],
+            data.get('gender'),
+            data.get('height'),
+            data.get('weight'),
+            data.get('activity'),
+            data.get('health_goals'),
+            data.get('dietary_restrictions'),
+            data['blood_type'],
+            data['patient_address'],
+            data['patient_zipcode'],
+            data['patient_city'],
+            data['patient_state'],
+            data.get('medical_conditions'),
+            data.get('family_history', "None"),
+            data.get('past_procedures', "None")
+        )
+        cursor.execute(insert_survey_query, survey_values)
+
+        # Commit transaction ---
+        mysql.connection.commit()
+        return jsonify({"message": "Patient and survey registered successfully!"}), 201
+
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+
 
 @patient_bp.route('/select-doctor', methods=['POST'])
 def select_doctor():
@@ -657,5 +759,40 @@ def get_patient_bill(appt_id):
         return jsonify(bill), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()
+
+
+
+@patient_bp.route('/remove_doctor/<int:patient_id>', methods=['PUT'])
+def remove_patient_doctor(patient_id):
+    cursor = mysql.connection.cursor()
+
+    try:
+        # First, check if patient exists
+        cursor.execute("SELECT doctor_id FROM PATIENT WHERE patient_id = %s", (patient_id,))
+        patient = cursor.fetchone()
+
+        if not patient:
+            return jsonify({"error": "Patient not found."}), 404
+
+        if patient[0] is None:
+            return jsonify({"message": "Patient already has no assigned doctor."}), 200
+
+        # Then, remove the doctor
+        cursor.execute("""
+            UPDATE PATIENT
+            SET doctor_id = NULL
+            WHERE patient_id = %s
+        """, (patient_id,))
+        mysql.connection.commit()
+
+        return jsonify({"message": "Doctor successfully removed from patient."}), 200
+
+    except Exception as e:
+        print(f"Exception: {e}")
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+
     finally:
         cursor.close()

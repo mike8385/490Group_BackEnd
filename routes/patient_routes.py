@@ -757,3 +757,38 @@ def get_patient_bill(appt_id):
         return jsonify({"error": str(e)}), 400
     finally:
         cursor.close()
+
+
+
+@patient_bp.route('/remove_doctor/<int:patient_id>', methods=['PUT'])
+def remove_patient_doctor(patient_id):
+    cursor = mysql.connection.cursor()
+
+    try:
+        # First, check if patient exists
+        cursor.execute("SELECT doctor_id FROM PATIENT WHERE patient_id = %s", (patient_id,))
+        patient = cursor.fetchone()
+
+        if not patient:
+            return jsonify({"error": "Patient not found."}), 404
+
+        if patient[0] is None:
+            return jsonify({"message": "Patient already has no assigned doctor."}), 200
+
+        # Then, remove the doctor
+        cursor.execute("""
+            UPDATE PATIENT
+            SET doctor_id = NULL
+            WHERE patient_id = %s
+        """, (patient_id,))
+        mysql.connection.commit()
+
+        return jsonify({"message": "Doctor successfully removed from patient."}), 200
+
+    except Exception as e:
+        print(f"Exception: {e}")
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+
+    finally:
+        cursor.close()

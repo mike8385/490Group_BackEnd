@@ -387,6 +387,7 @@ def add_appointment():
     insert_query = """
         INSERT INTO PATIENT_APPOINTMENT (
             patient_id,
+            doctor_id,
             appointment_datetime,
             reason_for_visit,
             current_medications,
@@ -394,39 +395,28 @@ def add_appointment():
             doctor_appointment_note,
             accepted,
             meal_prescribed
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
-    # Lookup doctor_id for the current patient
-    cursor.execute("SELECT doctor_id FROM PATIENT WHERE patient_id = %s", (data['patient_id'],))
-    doctor_result = cursor.fetchone()
 
-    doctor_id = doctor_result[0] if doctor_result else None
-    print("[DEBUG] Found doctor_id:", doctor_id)
+    values = (
+        data['patient_id'],
+        data['doctor_id'],
+        data['appointment_datetime'],
+        data['reason_for_visit'],
+        data.get('current_medications'),
+        data.get('exercise_frequency'),
+        data.get('doctor_appointment_note'),
+        data.get('accepted', 0),
+        data.get('meal_prescribed')
+    )
 
-
-    try:
-        values = (
-            data['patient_id'],
-            data['appointment_datetime'],
-            data['reason_for_visit'],
-            data.get('current_medications', ''),
-            data.get('exercise_frequency', ''),
-            data.get('doctor_appointment_note', ''),
-            data.get('accepted', 0),
-            data.get('meal_prescribed') or None
-
-        )
-        print("[DEBUG] Values to insert:", values)
-        print("[DEBUG] Executing query:", cursor.mogrify(insert_query, values))  # Log the exact SQL
-
-
-        cursor.execute(insert_query, values)
-        mysql.connection.commit()
-        return jsonify({"message": "Appointment created successfully!"}), 201
-    except Exception as e:
-        print("[ERROR] Exception while inserting appointment:", str(e))
-        mysql.connection.rollback()
-        return jsonify({"error": str(e)}), 400
+    cursor.execute(insert_query, values)
+    mysql.connection.commit()
+    return jsonify({"message": "Appointment created successfully!"}), 201
+    # except Exception as e:
+    #     print("[ERROR] Exception while inserting appointment:", str(e))
+    #     mysql.connection.rollback()
+    #     return jsonify({"error": str(e)}), 400
 
 
 # get appt by patient id
@@ -525,3 +515,147 @@ def get_patient_email(patient_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+    
+# updates a patients doctor rating (1-5)
+@patient_bp.route('/patient/rating', methods=['PUT'])
+def update_doctor_rating():
+    data = request.get_json()
+    patient_id = data.get('patient_id')
+    rating = data.get('rating')
+
+    if not isinstance(patient_id, int) or not isinstance(rating, (int, float)) or not (1 <= rating <= 5):
+        return jsonify({"error": "patient_id must be an integer and rating must be between 1 and 5."}), 400
+
+    cursor = mysql.connection.cursor()
+
+    query = "UPDATE PATIENT SET doctor_rating = %s WHERE patient_id = %s"
+
+    try:
+        cursor.execute(query, (rating, patient_id))
+        mysql.connection.commit()
+        return jsonify({"message": "Doctor rating updated successfully."}), 200
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()
+
+# get a patient's prescription
+@patient_bp.route('/patient/<int:patient_id>/prescriptions', methods=['GET'])
+def get_patient_prescriptions(patient_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT prescription_id, medicine_id, quantity, picked_up, filled, created_at
+        FROM PATIENT_PRESCRIPTION
+        WHERE patient_id = %s
+    """
+
+    try:
+        cursor.execute(query, (patient_id,))
+        rows = cursor.fetchall()
+        prescriptions = [
+            {
+                "prescription_id": row[0],
+                "medicine_id": row[1],
+                "quantity": row[2],
+                "picked_up": bool(row[3]),
+                "filled": bool(row[4]),
+                "created_at": row[5].isoformat()
+            } for row in rows
+        ]
+        return jsonify(prescriptions), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()
+
+# updates if a patient has picked up their prescription
+@patient_bp.route('/prescription/pickup', methods=['PUT'])
+def update_prescription_pickup():
+    data = request.get_json()
+    prescription_id = data.get('prescription_id')
+
+    if not isinstance(prescription_id, int):
+        return jsonify({"error": "prescription_id must be an integer."}), 400
+
+    cursor = mysql.connection.cursor()
+
+    query = "UPDATE PATIENT_PRESCRIPTION SET picked_up = 1 WHERE prescription_id = %s"
+
+    try:
+        cursor.execute(query, (prescription_id,))
+        mysql.connection.commit()
+        return jsonify({"message": "Prescription marked as picked up."}), 200
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()
+
+# add a patient's bill
+@patient_bp.route('/patient/bill', methods=['POST'])
+def add_patient_bill():
+    data = request.get_json()
+    appt_id = data.get('appt_id')
+    unit_price = data.get('unit_price')
+    charge = data.get('charge')
+    credit = data.get('credit')
+
+    if not all(isinstance(val, (int, float)) and val >= 0 for val in [unit_price, charge, credit]):
+        return jsonify({"error": "unit_price, charge, and credit must be non-negative numbers."}), 400
+
+    if not isinstance(appt_id, int):
+        return jsonify({"error": "appt_id must be an integer."}), 400
+
+    cursor = mysql.connection.cursor()
+
+    query = """
+        INSERT INTO PATIENT_BILL (
+            appt_id, unit_price, charge, credit
+        ) VALUES (%s, %s, %s, %s)
+    """
+    values = (appt_id, unit_price, charge, credit)
+
+    try:
+        cursor.execute(query, values)
+        mysql.connection.commit()
+        return jsonify({"message": "Bill added successfully."}), 201
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()
+
+# get a patient's bill
+@patient_bp.route('/patient/<int:appt_id>/bill', methods=['GET'])
+def get_patient_bill(appt_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT bill_id, unit_price, charge, credit, current_bill, created_at
+        FROM PATIENT_BILL
+        WHERE appt_id = %s
+    """
+
+    try:
+        cursor.execute(query, (appt_id,))
+        result = cursor.fetchone()
+
+        if not result:
+            return jsonify({"error": "Bill not found for this appointment."}), 404
+
+        bill = {
+            "bill_id": result[0],
+            "unit_price": float(result[1]),
+            "charge": float(result[2]),
+            "credit": float(result[3]),
+            "current_bill": float(result[4]),
+            "created_at": result[5].isoformat()
+        }
+
+        return jsonify(bill), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()

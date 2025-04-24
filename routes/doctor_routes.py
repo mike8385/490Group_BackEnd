@@ -63,7 +63,7 @@ def get_doctor(doctor_id):
         SELECT doctor_id, first_name, last_name, email, description, license_num,
                license_exp_date, dob, med_school, specialty, years_of_practice, payment_fee,
                gender, phone_number, address, zipcode, city, state, doctor_picture,
-               created_at, updated_at
+               accepting_patients, created_at, updated_at
         FROM DOCTOR
         WHERE doctor_id = %s
     """
@@ -71,7 +71,7 @@ def get_doctor(doctor_id):
     doctor = cursor.fetchone()
 
     if doctor:
-        doctor_picture = doctor[18]  # Adjusted index due to added fields
+        doctor_picture = doctor[18]
         if doctor_picture:
             if isinstance(doctor_picture, str):
                 doctor_picture = doctor_picture.encode('utf-8')
@@ -96,10 +96,12 @@ def get_doctor(doctor_id):
             "zipcode": doctor[15],
             "city": doctor[16],
             "state": doctor[17],
-            "doctor_picture": doctor_picture
+            "doctor_picture": doctor_picture,
+            "accepting_patients": doctor[19]  # New field added here
         }), 200
     else:
         return jsonify({"error": "Doctor not found"}), 404
+
 
 @doctor_bp.route('/login-doctor', methods=['POST'])
 def login_doctor():
@@ -283,3 +285,32 @@ def add_prescription():
 
     finally:
         cursor.close()
+
+# accepting patients - general
+@doctor_bp.route('/doctor-accepting-status/<int:doctor_id>', methods=['PATCH'])
+def update_accepting_status(doctor_id):
+    data = request.get_json()
+    new_status = data.get('accepting_patients')
+
+    if new_status not in [0, 1]:
+        return jsonify({"error": "Invalid status. 'accepting_patients' must be 0 (no) or 1 (yes)."}), 400
+
+    cursor = mysql.connection.cursor()
+
+    query = """
+        UPDATE DOCTOR
+        SET accepting_patients = %s, updated_at = CURRENT_TIMESTAMP
+        WHERE doctor_id = %s
+    """
+
+    try:
+        cursor.execute(query, (new_status, doctor_id))
+        mysql.connection.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({"error": "Doctor not found or no change made."}), 404
+
+        return jsonify({"message": "Doctor's accepting status updated successfully."}), 200
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400

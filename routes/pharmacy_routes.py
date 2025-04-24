@@ -199,15 +199,16 @@ def update_stock():
 def get_pharmacies():
     cursor = mysql.connection.cursor()
     try:
-        cursor.execute("SELECT pharmacy_name, address, zipcode, city FROM PHARMACY")
+        cursor.execute("SELECT pharmacy_id, pharmacy_name, address, zipcode, city FROM PHARMACY")
         rows = cursor.fetchall()
 
         pharmacies = [
             {
-                "name": row[0],
-                "address": row[1],
-                "zipcode": row[2],
-                "city": row[3]
+                "id": row[0],
+                "name": row[1],
+                "address": row[2],
+                "zipcode": row[3],
+                "city": row[4]
             } for row in rows
         ]
 

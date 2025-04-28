@@ -327,6 +327,7 @@ def get_patient_init_survey(patient_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+"""
 
 @patient_bp.route('/login-patient', methods=['POST'])
 def login_patient():
@@ -365,23 +366,23 @@ def login_patient():
     finally:
         cursor.close()
 
-# @patient_bp.route('/login-patient', methods=['POST'])
-# def login_patient():
-#     data = request.get_json()
-#     email = data.get('email')
-#     # Ignoring password for testing
+""" 
+@patient_bp.route('/login-patient', methods=['POST'])
+def login_patient():
+    data = request.get_json()
+    email = data.get('email')
+    # Ignoring password for testing
 
-#     cursor = mysql.connection.cursor()
+    cursor = mysql.connection.cursor()
 
-#     query = "SELECT patient_id FROM PATIENT WHERE patient_email = %s"
-#     cursor.execute(query, (email,))
-#     patient = cursor.fetchone()
+    query = "SELECT patient_id FROM PATIENT WHERE patient_email = %s"
+    cursor.execute(query, (email,))
+    patient = cursor.fetchone()
 
-#     if patient:
-#         return jsonify({"message": "Login successful", "patient_id": patient[0]}), 200
-#     else:
-#         return jsonify({"error": "Patient not found"}), 404
-
+    if patient:
+        return jsonify({"message": "Login successful", "patient_id": patient[0]}), 200
+    else:
+        return jsonify({"error": "Patient not found"}), 404 
     
 # add to daily survey
 @patient_bp.route('/daily-survey', methods=['POST'])

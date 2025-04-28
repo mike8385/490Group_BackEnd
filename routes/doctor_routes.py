@@ -25,8 +25,9 @@ def register_doctor():
             first_name, last_name, email, password, description, license_num,
             license_exp_date, dob, med_school, years_of_practice, specialty, payment_fee,
             gender, phone_number, address, zipcode, city, state, doctor_picture
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """  
+
     values = (
         data['first_name'],
         data['last_name'],

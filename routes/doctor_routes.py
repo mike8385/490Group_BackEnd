@@ -1,9 +1,13 @@
 from flask import Blueprint, request, jsonify
 from db import mysql
 import bcrypt, base64
+from google.cloud import storage
+import time
 
 doctor_bp = Blueprint('doctor_bp', __name__)
 
+GCS_BUCKET = "clinic-db-bucket"
+storage_client = storage.Client()
 @doctor_bp.route('/register-doctor', methods=['POST'])
 def register_doctor():
     data = request.get_json()
@@ -12,20 +16,31 @@ def register_doctor():
     password = data['password']
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
+    doctor_picture_url = None
+
     #for the picture i'm still not sure
     doctor_picture = data.get('doctor_picture')  # Base64 encoded image data
 
+    # saving data into GCS bucket. it saves the url in the db instead of binary data.
     if doctor_picture:
-        # Decode the base64 string to binary data
-        doctor_picture = base64.b64decode(doctor_picture)
-
+        try:
+            # Decode the base64 string to binary data
+            doctor_picture = base64.b64decode(doctor_picture)
+            filename = f"doctors/{data['first_name']}_{int(time.time())}.png"
+            bucket = storage_client.bucket(GCS_BUCKET)
+            blob = bucket.blob(filename)
+            blob.upload_from_string(doctor_picture, content_type='image/png')
+            # blob.make_public()
+            doctor_picture_url = blob.public_url
+        except Exception as e:
+            return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
     cursor = mysql.connection.cursor()
     query = """
         INSERT INTO DOCTOR (
             first_name, last_name, email, password, description, license_num,
             license_exp_date, dob, med_school, years_of_practice, specialty, payment_fee,
             gender, phone_number, address, zipcode, city, state, doctor_picture
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     values = (
         data['first_name'],
@@ -46,7 +61,7 @@ def register_doctor():
         data['zipcode'],
         data['city'],
         data['state'],
-        doctor_picture  # should be binary if present
+        doctor_picture_url  # saving url instead of binary data
     )
     try:
         cursor.execute(query, values)
@@ -63,7 +78,7 @@ def get_doctor(doctor_id):
         SELECT doctor_id, first_name, last_name, email, description, license_num,
                license_exp_date, dob, med_school, specialty, years_of_practice, payment_fee,
                gender, phone_number, address, zipcode, city, state, doctor_picture,
-               accepting_patients, created_at, updated_at
+               created_at, updated_at
         FROM DOCTOR
         WHERE doctor_id = %s
     """
@@ -71,7 +86,7 @@ def get_doctor(doctor_id):
     doctor = cursor.fetchone()
 
     if doctor:
-        doctor_picture = doctor[18]
+        doctor_picture = doctor[18]  # Adjusted index due to added fields
         if doctor_picture:
             if isinstance(doctor_picture, str):
                 doctor_picture = doctor_picture.encode('utf-8')
@@ -96,12 +111,10 @@ def get_doctor(doctor_id):
             "zipcode": doctor[15],
             "city": doctor[16],
             "state": doctor[17],
-            "doctor_picture": doctor_picture,
-            "accepting_patients": doctor[19]  # New field added here
+            "doctor_picture": doctor_picture
         }), 200
     else:
         return jsonify({"error": "Doctor not found"}), 404
-
 
 @doctor_bp.route('/login-doctor', methods=['POST'])
 def login_doctor():
@@ -150,7 +163,7 @@ def get_all_doctors():
     query = """
         SELECT doctor_id, first_name, last_name, email, description, license_num,
                license_exp_date, dob, med_school, specialty, years_of_practice, payment_fee,
-               gender, phone_number, address, zipcode, city, state, doctor_picture, password, accepting_patients
+               gender, phone_number, address, zipcode, city, state, doctor_picture, password,
                created_at, updated_at
         FROM DOCTOR
     """
@@ -159,7 +172,7 @@ def get_all_doctors():
 
     result = []
     for doc in doctors:
-        doctor_picture = doc[18]
+        doctor_picture = doc[19]
         if doctor_picture:
             if isinstance(doctor_picture, str):
                 doctor_picture = doctor_picture.encode('utf-8')
@@ -184,9 +197,8 @@ def get_all_doctors():
             "zipcode": doc[15],
             "city": doc[16],
             "state": doc[17],
-            "doctor_picture": doctor_picture,
-            "password": doc[19],
-            "accepting_patients": doc[20]
+            "password": doc[18],
+            "doctor_picture": doctor_picture
         })
 
     return jsonify(result), 200
@@ -251,67 +263,3 @@ def update_appointment_status(appointment_id):
         mysql.connection.rollback()
         return jsonify({"error": str(e)}), 400
 
-# doctor adds a prescription for a patient
-@doctor_bp.route('/prescription/add', methods=['POST'])
-def add_prescription():
-    data = request.get_json()
-    patient_id = data.get('patient_id')
-    medicine_id = data.get('medicine_id')
-    quantity = data.get('quantity')
-
-    # Basic validation
-    if not all([patient_id, medicine_id, quantity]):
-        return jsonify({"error": "patient_id, medicine_id, and quantity are required."}), 400
-
-    if not isinstance(quantity, int) or quantity <= 0:
-        return jsonify({"error": "quantity must be a positive integer."}), 400
-
-    cursor = mysql.connection.cursor()
-
-    query = """
-        INSERT INTO PATIENT_PRESCRIPTION (
-            patient_id, medicine_id, quantity
-        ) VALUES (%s, %s, %s)
-    """
-    values = (patient_id, medicine_id, quantity)
-
-    try:
-        cursor.execute(query, values)
-        mysql.connection.commit()
-        return jsonify({"message": "Prescription added successfully."}), 201
-
-    except Exception as e:
-        mysql.connection.rollback()
-        return jsonify({"error": str(e)}), 400
-
-    finally:
-        cursor.close()
-
-# accepting patients - general
-@doctor_bp.route('/doctor-accepting-status/<int:doctor_id>', methods=['PATCH'])
-def update_accepting_status(doctor_id):
-    data = request.get_json()
-    new_status = data.get('accepting_patients')
-
-    if new_status not in [0, 1]:
-        return jsonify({"error": "Invalid status. 'accepting_patients' must be 0 (no) or 1 (yes)."}), 400
-
-    cursor = mysql.connection.cursor()
-
-    query = """
-        UPDATE DOCTOR
-        SET accepting_patients = %s, updated_at = CURRENT_TIMESTAMP
-        WHERE doctor_id = %s
-    """
-
-    try:
-        cursor.execute(query, (new_status, doctor_id))
-        mysql.connection.commit()
-
-        if cursor.rowcount == 0:
-            return jsonify({"error": "Doctor not found or no change made."}), 404
-
-        return jsonify({"message": "Doctor's accepting status updated successfully."}), 200
-    except Exception as e:
-        mysql.connection.rollback()
-        return jsonify({"error": str(e)}), 400

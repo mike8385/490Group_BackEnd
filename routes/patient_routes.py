@@ -415,7 +415,7 @@ def get_daily_surveys(patient_id):
     query = """
         SELECT * FROM PATIENT_DAILY_SURVEY
         WHERE patient_id = %s
-        ORDER BY date DESC
+        ORDER BY date ASC
     """
     
     try:
@@ -481,9 +481,6 @@ def get_weekly_surveys(patient_id):
 @patient_bp.route('/appointments', methods=['POST'])
 def add_appointment():
     data = request.get_json()
-    print("[DEBUG] Incoming data for appointment:")
-    print(data)
-
     cursor = mysql.connection.cursor()
 
     insert_query = """
@@ -512,14 +509,13 @@ def add_appointment():
         data.get('meal_prescribed')
     )
 
-    cursor.execute(insert_query, values)
-    mysql.connection.commit()
-    return jsonify({"message": "Appointment created successfully!"}), 201
-    # except Exception as e:
-    #     print("[ERROR] Exception while inserting appointment:", str(e))
-    #     mysql.connection.rollback()
-    #     return jsonify({"error": str(e)}), 400
-
+    try:
+        cursor.execute(insert_query, values)
+        mysql.connection.commit()
+        return jsonify({"message": "Appointment created successfully!"}), 201
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
 
 # get appt by patient id
 @patient_bp.route('/appointments/<int:patient_id>', methods=['GET'])
@@ -759,40 +755,5 @@ def get_patient_bill(appt_id):
         return jsonify(bill), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
-    finally:
-        cursor.close()
-
-
-
-@patient_bp.route('/remove_doctor/<int:patient_id>', methods=['PUT'])
-def remove_patient_doctor(patient_id):
-    cursor = mysql.connection.cursor()
-
-    try:
-        # First, check if patient exists
-        cursor.execute("SELECT doctor_id FROM PATIENT WHERE patient_id = %s", (patient_id,))
-        patient = cursor.fetchone()
-
-        if not patient:
-            return jsonify({"error": "Patient not found."}), 404
-
-        if patient[0] is None:
-            return jsonify({"message": "Patient already has no assigned doctor."}), 200
-
-        # Then, remove the doctor
-        cursor.execute("""
-            UPDATE PATIENT
-            SET doctor_id = NULL
-            WHERE patient_id = %s
-        """, (patient_id,))
-        mysql.connection.commit()
-
-        return jsonify({"message": "Doctor successfully removed from patient."}), 200
-
-    except Exception as e:
-        print(f"Exception: {e}")
-        mysql.connection.rollback()
-        return jsonify({"error": str(e)}), 400
-
     finally:
         cursor.close()

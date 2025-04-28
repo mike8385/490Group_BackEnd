@@ -63,7 +63,7 @@ def get_doctor(doctor_id):
         SELECT doctor_id, first_name, last_name, email, description, license_num,
                license_exp_date, dob, med_school, specialty, years_of_practice, payment_fee,
                gender, phone_number, address, zipcode, city, state, doctor_picture,
-               accepting_patients, created_at, updated_at
+               accepting_patients, doctor_rating
         FROM DOCTOR
         WHERE doctor_id = %s
     """
@@ -97,11 +97,11 @@ def get_doctor(doctor_id):
             "city": doctor[16],
             "state": doctor[17],
             "doctor_picture": doctor_picture,
-            "accepting_patients": doctor[19]  # New field added here
+            "accepting_patients": doctor[19],
+            "doctor_rating": doctor[20]
         }), 200
     else:
         return jsonify({"error": "Doctor not found"}), 404
-
 
 @doctor_bp.route('/login-doctor', methods=['POST'])
 def login_doctor():
@@ -226,7 +226,7 @@ def get_appointments_by_doctor(doctor_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
     
-# doctor accepts an appointment [1], else deafult 0
+# doctor accepts an appointment [1], else default 0
 @doctor_bp.route('/doc-appointments-status/<int:appointment_id>', methods=['PATCH'])
 def update_appointment_status(appointment_id):
     data = request.get_json()
@@ -315,3 +315,37 @@ def update_accepting_status(doctor_id):
     except Exception as e:
         mysql.connection.rollback()
         return jsonify({"error": str(e)}), 400
+
+# add appointment notes
+@doctor_bp.route('/appointment/<int:appt_id>/add_note', methods=['PATCH'])
+def add_appointment_note(appt_id):
+    data = request.get_json()
+    note = data.get('doctor_appointment_note')
+
+    cursor = mysql.connection.cursor()
+
+    try:
+        # Add the appointment's note
+        cursor.execute("""
+            UPDATE PATIENT_APPOINTMENT
+            SET doctor_appointment_note = %s
+            WHERE patient_appt_id = %s
+        """, (note, appt_id))
+
+        if cursor.rowcount == 0:
+            return jsonify({"error": "Appointment not found."}), 404
+
+        mysql.connection.commit()
+
+        return jsonify({
+            "message": "Doctor's appointment note added successfully.",
+            "appt_id": appt_id,
+            "doctor_appointment_note": note
+        }), 200
+
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()
+

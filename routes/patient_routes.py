@@ -305,6 +305,8 @@ def remove_patient_doctor(patient_id):
         cursor.close()
 
 # ------------------ LOGIN ENDPOINTS ---------------------------------------
+
+'''
 @patient_bp.route('/login-patient', methods=['POST'])
 def login_patient():
     data = request.get_json()
@@ -341,23 +343,24 @@ def login_patient():
             return jsonify({"error": "Patient not found"}), 404
     finally:
         cursor.close()
+'''
 
-# @patient_bp.route('/login-patient', methods=['POST'])
-# def login_patient():
-#     data = request.get_json()
-#     email = data.get('email')
-#     # Ignoring password for testing
+@patient_bp.route('/login-patient', methods=['POST'])
+def login_patient():
+    data = request.get_json()
+    email = data.get('email')
+    # Ignoring password for testing
 
-#     cursor = mysql.connection.cursor()
+    cursor = mysql.connection.cursor()
 
-#     query = "SELECT patient_id FROM PATIENT WHERE patient_email = %s"
-#     cursor.execute(query, (email,))
-#     patient = cursor.fetchone()
+    query = "SELECT patient_id FROM PATIENT WHERE patient_email = %s"
+    cursor.execute(query, (email,))
+    patient = cursor.fetchone()
 
-#     if patient:
-#         return jsonify({"message": "Login successful", "patient_id": patient[0]}), 200
-#     else:
-#         return jsonify({"error": "Patient not found"}), 404
+    if patient:
+        return jsonify({"message": "Login successful", "patient_id": patient[0]}), 200
+    else:
+        return jsonify({"error": "Patient not found"}), 404
 
 #---------------------------- DAILY + WEEKLY SURVEY END POINTS ------------------------------------
 # add to daily survey
@@ -931,9 +934,18 @@ def get_patient_prescriptions(appt_id):
     cursor = mysql.connection.cursor()
 
     query = """
-        SELECT prescription_id, medicine_id, quantity, picked_up, filled, created_at
-        FROM PATIENT_PRESCRIPTION
-        WHERE appt_id = %s
+        SELECT 
+            pp.prescription_id, 
+            pp.medicine_id, 
+            m.medicine_name,
+            m.medicine_price,
+            pp.quantity, 
+            pp.picked_up, 
+            pp.filled, 
+            pp.created_at
+        FROM PATIENT_PRESCRIPTION pp
+        JOIN MEDICINE m ON pp.medicine_id = m.medicine_id
+        WHERE pp.appt_id = %s
     """
 
     try:
@@ -943,10 +955,12 @@ def get_patient_prescriptions(appt_id):
             {
                 "prescription_id": row[0],
                 "medicine_id": row[1],
-                "quantity": row[2],
-                "picked_up": bool(row[3]),
-                "filled": bool(row[4]),
-                "created_at": row[5].isoformat()
+                "medicine_name": row[2],
+                "medicine_price": float(row[3]),
+                "quantity": row[4],
+                "picked_up": bool(row[5]),
+                "filled": bool(row[6]),
+                "created_at": row[7].isoformat()
             } for row in rows
         ]
         return jsonify(prescriptions), 200
@@ -954,6 +968,7 @@ def get_patient_prescriptions(appt_id):
         return jsonify({"error": str(e)}), 400
     finally:
         cursor.close()
+
 
 # updates if a patient has picked up their prescription
 @patient_bp.route('/prescription/pickup', methods=['PATCH'])
@@ -1038,5 +1053,3 @@ def edit_patient():
 
     finally:
         cursor.close()
-
-

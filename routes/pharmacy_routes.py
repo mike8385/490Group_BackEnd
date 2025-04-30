@@ -71,7 +71,8 @@ def get_pharmacy(pharmacy_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
-    
+
+'''
 #pharmacy login
 @pharmacy_bp.route('/login-pharmacy', methods=['POST'])
 def login_pharmacy():
@@ -94,6 +95,27 @@ def login_pharmacy():
             return jsonify({"message": "Login successful", "pharmacy_id": pharmacy[0]}), 200
         else:
             return jsonify({"error": "Invalid credentials"}), 401
+    else:
+        return jsonify({"error": "Pharmacy not found"}), 404
+    
+'''
+
+#pharmacy login
+@pharmacy_bp.route('/login-pharmacy', methods=['POST'])
+def login_pharmacy():
+    data = request.get_json()
+    email = data.get('email')
+    password = data.get('password')
+
+    cursor = mysql.connection.cursor()
+
+    # Query to fetch pharmacy details based on email
+    query = "SELECT pharmacy_id, email, password FROM pharmacy WHERE email = %s"
+    cursor.execute(query, (email,))
+    pharmacy = cursor.fetchone()
+
+    if pharmacy:
+        return jsonify({"message": "Login successful", "pharmacy_id": pharmacy[0]}), 200
     else:
         return jsonify({"error": "Pharmacy not found"}), 404
     

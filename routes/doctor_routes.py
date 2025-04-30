@@ -378,3 +378,35 @@ def add_appointment_note(appt_id):
     finally:
         cursor.close()
 
+# get average doctor rating
+@doctor_bp.route('/doctor/<int:doctor_id>/rating', methods=['GET'])
+def get_doctor_average_rating(doctor_id):
+    cursor = mysql.connection.cursor()
+
+    try:
+        # Compute average appointment rating for the doctor
+        cursor.execute("""
+            SELECT AVG(appt_rating)
+            FROM PATIENT_APPOINTMENT
+            WHERE doctor_id = %s AND appt_rating IS NOT NULL
+        """, (doctor_id,))
+        result = cursor.fetchone()
+        avg_rating = float(result[0]) if result[0] is not None else None
+
+        if avg_rating is None:
+            return jsonify({
+                "message": "This doctor has no ratings yet.",
+                "doctor_id": doctor_id,
+                "average_rating": None
+            }), 200
+
+        return jsonify({
+            "message": "Average rating retrieved successfully.",
+            "doctor_id": doctor_id,
+            "average_rating": round(avg_rating, 2)
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()

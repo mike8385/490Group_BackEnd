@@ -124,21 +124,34 @@ def login_doctor():
 
     cursor = mysql.connection.cursor()
 
-    # Query to fetch doctor details based on email
-    query = "SELECT doctor_id, email, password FROM DOCTOR WHERE email = %s"
-    cursor.execute(query, (email,))
-    doctor = cursor.fetchone()
+    try:
+        # Step 1: Get all emails from the first 50 entries
+        cursor.execute("SELECT email FROM DOCTOR ORDER BY doctor_id ASC LIMIT 50")
+        test_emails = set(row[0] for row in cursor.fetchall())
 
-    if doctor:
-        stored_password = doctor[2]  # Get the stored hashed password (3rd field in query result)
-        
-        # Check if entered password matches the stored password
-        if bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8')):
-            return jsonify({"message": "Login successful", "doctor_id": doctor[0]}), 200
+        # Step 2: Get patient info by email
+        cursor.execute("SELECT doctor_id, password FROM DOCTOR WHERE email = %s", (email,))
+        doctor = cursor.fetchone()
+
+        if doctor:
+            doctor_id, stored_password = doctor
+
+            if email in test_emails:
+                # Password is in plain text
+                if password == stored_password:
+                    return jsonify({"message": "Login successful (legacy plain text)", "doctor_id": doctor_id}), 200
+                else:
+                    return jsonify({"error": "Invalid credentials"}), 401
+            else:
+                # Password is hashed
+                if bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8')):
+                    return jsonify({"message": "Login successful", "doctor_id": doctor_id}), 200
+                else:
+                    return jsonify({"error": "Invalid credentials"}), 401
         else:
-            return jsonify({"error": "Invalid credentials"}), 401
-    else:
-        return jsonify({"error": "Doctor not found"}), 404
+            return jsonify({"error": "Doctor not found"}), 404
+    finally:
+        cursor.close()
 
 @doctor_bp.route('/doctor/<int:doctor_id>', methods=['DELETE'])
 def delete_doctor(doctor_id):

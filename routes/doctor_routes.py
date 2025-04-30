@@ -42,8 +42,6 @@ def register_doctor():
             gender, phone_number, address, zipcode, city, state, doctor_picture
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """  
 
     values = (
         data['first_name'],

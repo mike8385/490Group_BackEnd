@@ -245,7 +245,6 @@ def get_patient_init_survey(patient_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
-"""
 
 # ----------------- PATIENT x DOCTOR ENDPOINTS -------------------------
 @patient_bp.route('/select-doctor', methods=['POST'])
@@ -345,8 +344,6 @@ def login_patient():
     finally:
         cursor.close()
 '''
-
-""" 
 
 @patient_bp.route('/login-patient', methods=['POST'])
 def login_patient():

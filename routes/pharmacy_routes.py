@@ -268,4 +268,26 @@ def fill_prescription():
         cursor.close()
 
 
-    
+@pharmacy_bp.route('/all_meds', methods=['GET'])
+def get_all_medicines():
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT *
+        FROM MEDICINE
+    """
+    cursor.execute(query)
+    medicines = cursor.fetchall()
+
+    result = []
+    for med in medicines:
+        result.append({
+            "medicine_id": med[0],
+            "medicine_name": med[1],
+            "medicine_price": float(med[2]),
+            "description" : med[3],
+            "side_effects" : med[4],
+            "benefits" : med[5]
+        })
+
+    return jsonify(result), 200

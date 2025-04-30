@@ -80,7 +80,7 @@ def get_doctor(doctor_id):
         SELECT doctor_id, first_name, last_name, email, description, license_num,
                license_exp_date, dob, med_school, specialty, years_of_practice, payment_fee,
                gender, phone_number, address, zipcode, city, state, doctor_picture,
-               doctor_rating
+               doctor_rating, accepting_patients
         FROM DOCTOR
         WHERE doctor_id = %s
     """

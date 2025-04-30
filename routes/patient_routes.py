@@ -246,6 +246,7 @@ def get_patient_init_survey(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+# ----------------- PATIENT x DOCTOR ENDPOINTS -------------------------
 @patient_bp.route('/select-doctor', methods=['POST'])
 def select_doctor():
     data = request.get_json()
@@ -269,6 +270,39 @@ def select_doctor():
     except Exception as e:
         mysql.connection.rollback()
         return jsonify({"error": str(e)}), 400
+
+@patient_bp.route('/remove_doctor/<int:patient_id>', methods=['PUT'])
+def remove_patient_doctor(patient_id):
+    cursor = mysql.connection.cursor()
+
+    try:
+        # First, check if patient exists
+        cursor.execute("SELECT doctor_id FROM PATIENT WHERE patient_id = %s", (patient_id,))
+        patient = cursor.fetchone()
+
+        if not patient:
+            return jsonify({"error": "Patient not found."}), 404
+
+        if patient[0] is None:
+            return jsonify({"message": "Patient already has no assigned doctor."}), 200
+
+        # Then, remove the doctor
+        cursor.execute("""
+            UPDATE PATIENT
+            SET doctor_id = NULL
+            WHERE patient_id = %s
+        """, (patient_id,))
+        mysql.connection.commit()
+
+        return jsonify({"message": "Doctor successfully removed from patient."}), 200
+
+    except Exception as e:
+        print(f"Exception: {e}")
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+
+    finally:
+        cursor.close()
 
 # ------------------ LOGIN ENDPOINTS ---------------------------------------
 @patient_bp.route('/login-patient', methods=['POST'])
@@ -551,7 +585,7 @@ def get_patient_email(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-# rate an appointment + update the doctor's average rating when you do
+# rate an appointment + update doctors avg rating- tested
 @patient_bp.route('/appointment/rate', methods=['PATCH'])
 def rate_appointment():
     data = request.get_json()
@@ -577,7 +611,7 @@ def rate_appointment():
         if cursor.rowcount == 0:
             return jsonify({"error": "Appointment not found."}), 404
 
-        # Find which doctor this appointment belongs to
+        # Get the doctor_id for this appointment
         cursor.execute("""
             SELECT doctor_id
             FROM PATIENT_APPOINTMENT
@@ -589,16 +623,16 @@ def rate_appointment():
 
         doctor_id = doctor_result[0]
 
-        # Calculate the new average rating for this doctor
+        # Compute the average rating for the doctor
         cursor.execute("""
             SELECT AVG(appt_rating)
             FROM PATIENT_APPOINTMENT
             WHERE doctor_id = %s AND appt_rating IS NOT NULL
         """, (doctor_id,))
-        avg_rating_result = cursor.fetchone()
-        avg_rating = float(avg_rating_result[0]) if avg_rating_result[0] is not None else None
+        avg_result = cursor.fetchone()
+        avg_rating = float(avg_result[0]) if avg_result and avg_result[0] is not None else None
 
-        # Update the doctor's rating
+        # Update the doctor's rating if an average exists
         if avg_rating is not None:
             cursor.execute("""
                 UPDATE DOCTOR
@@ -609,220 +643,16 @@ def rate_appointment():
         mysql.connection.commit()
 
         return jsonify({
-            "message": "Appointment rated successfully and doctor rating updated.",
+            "message": "Appointment rated successfully and doctor's rating updated.",
             "appt_id": appt_id,
             "rating": rating,
             "doctor_id": doctor_id,
-            "new_doctor_rating": avg_rating
+            "updated_doctor_rating": round(avg_rating, 2) if avg_rating is not None else None
         }), 200
 
     except Exception as e:
         mysql.connection.rollback()
         return jsonify({"error": str(e)}), 400
-    finally:
-        cursor.close()
-
-#-------------------------BILL ENDPOINTS ------------------------------------------------
-# add a patient's bill
-@patient_bp.route('/patient/bill', methods=['POST'])
-def add_patient_bill():
-    data = request.get_json()
-    appt_id = data.get('appt_id')
-    credit = data.get('credit')
-
-    if not isinstance(appt_id, int):
-        return jsonify({"error": "appt_id must be an integer."}), 400
-
-    if not isinstance(credit, (int, float)) or credit < 0:
-        return jsonify({"error": "credit must be a non-negative number."}), 400
-
-    cursor = mysql.connection.cursor()
-
-    try:
-        # Step 1: Get doctor_bill and patient_id
-        cursor.execute("""
-            SELECT pa.patient_id, d.payment_fee
-            FROM PATIENT_APPOINTMENT pa
-            JOIN DOCTOR d ON pa.doctor_id = d.doctor_id
-            WHERE pa.patient_appt_id = %s
-        """, (appt_id,))
-        result = cursor.fetchone()
-        if not result:
-            return jsonify({"error": "Invalid appt_id or doctor not found."}), 404
-
-        patient_id, doctor_bill = result
-        doctor_bill = float(doctor_bill)
-
-        # Step 2: Get pharm_bill
-        cursor.execute("""
-            SELECT IFNULL(SUM(pp.quantity * m.medicine_price), 0)
-            FROM PATIENT_PRESCRIPTION pp
-            JOIN MEDICINE m ON pp.medicine_id = m.medicine_id
-            WHERE pp.appt_id = %s
-        """, (appt_id,))
-        pharm_result = cursor.fetchone()
-        pharm_bill = float(pharm_result[0]) if pharm_result else 0.0
-
-        # Step 3: Find how many previous appointments this patient has bills for
-        cursor.execute("""
-            SELECT COUNT(*)
-            FROM PATIENT_BILL pb
-            JOIN PATIENT_APPOINTMENT pa ON pb.appt_id = pa.patient_appt_id
-            WHERE pa.patient_id = %s
-        """, (patient_id,))
-        count_result = cursor.fetchone()
-        appt_number = (count_result[0] or 0) + 1  # next appointment number
-
-        article_name = f"Appt {appt_number}"
-
-        # Step 4: Insert the bill
-        cursor.execute("""
-            INSERT INTO PATIENT_BILL (appt_id, doctor_bill, pharm_bill, credit, article)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (appt_id, doctor_bill, pharm_bill, credit, article_name))
-        mysql.connection.commit()
-
-        # Step 5: Calculate patient's total balance
-        cursor.execute("""
-            SELECT 
-                IFNULL(SUM(pb.credit), 0) - IFNULL(SUM(pb.charge), 0)
-            FROM 
-                PATIENT_BILL pb
-            JOIN 
-                PATIENT_APPOINTMENT pa ON pb.appt_id = pa.patient_appt_id
-            WHERE 
-                pa.patient_id = %s
-        """, (patient_id,))
-        balance_result = cursor.fetchone()
-        balance = float(balance_result[0]) if balance_result else 0.0
-
-        return jsonify({
-            "message": "Bill added successfully.",
-            "appt_id": appt_id,
-            "doctor_bill": doctor_bill,
-            "pharm_bill": pharm_bill,
-            "credit": credit,
-            "article": article_name,
-            "balance": balance
-        }), 201
-
-    except Exception as e:
-        mysql.connection.rollback()
-        return jsonify({"error": str(e)}), 400
-    finally:
-        cursor.close()
-
-@patient_bp.route('/patient/<int:patient_id>/bills', methods=['GET'])
-def get_all_bills_for_patient(patient_id):
-    cursor = mysql.connection.cursor()
-
-    query = """
-        SELECT 
-            pb.bill_id, pb.appt_id, pb.doctor_bill, pb.pharm_bill, pb.charge, 
-            pb.credit, pb.current_bill, p.article, pb.created_at
-        FROM 
-            PATIENT_BILL pb
-        JOIN 
-            PATIENT_APPOINTMENT pa ON pb.appt_id = pa.patient_appt_id
-        WHERE 
-            pa.patient_id = %s
-        ORDER BY 
-            pb.created_at DESC
-    """
-
-    try:
-        cursor.execute(query, (patient_id,))
-        results = cursor.fetchall()
-
-        if not results:
-            return jsonify({"message": "No bills found for this patient."}), 200
-
-        bills = []
-        for row in results:
-            bills.append({
-                "bill_id": row[0],
-                "appt_id": row[1],
-                "doctor_bill": float(row[2]),
-                "pharm_bill": float(row[3]),
-                "charge": float(row[4]),
-                "credit": float(row[5]),
-                "current_bill": float(row[6]),
-                "created_at": row[7].isoformat()
-            })
-
-        return jsonify(bills), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-    finally:
-        cursor.close()
-
-# make a payment
-@patient_bp.route('/appointment/payment', methods=['POST'])
-def make_payment():
-    data = request.get_json()
-    appt_id = data.get('appt_id')
-    credit = data.get('credit')
-
-    if not isinstance(appt_id, int):
-        return jsonify({"error": "appt_id must be an integer."}), 400
-
-    if not isinstance(credit, (int, float)) or credit < 0:
-        return jsonify({"error": "credit must be a non-negative number."}), 400
-
-    cursor = mysql.connection.cursor()
-
-    try:
-        cursor.execute("""
-            INSERT INTO PATIENT_BILL (appt_id, doctor_bill, pharm_bill, credit, article)
-            VALUES (%s, NULL, NULL, %s, 'Credit Card Payment')
-        """, (appt_id, credit))
-
-        mysql.connection.commit()
-
-        return jsonify({
-            "message": "Payment recorded successfully.",
-            "appt_id": appt_id,
-            "credit": credit,
-            "article": "Credit Card Payment"
-        }), 201
-
-    except Exception as e:
-        mysql.connection.rollback()
-        return jsonify({"error": str(e)}), 400
-    finally:
-        cursor.close()
-
-@patient_bp.route('/remove_doctor/<int:patient_id>', methods=['PUT'])
-def remove_patient_doctor(patient_id):
-    cursor = mysql.connection.cursor()
-
-    try:
-        # First, check if patient exists
-        cursor.execute("SELECT doctor_id FROM PATIENT WHERE patient_id = %s", (patient_id,))
-        patient = cursor.fetchone()
-
-        if not patient:
-            return jsonify({"error": "Patient not found."}), 404
-
-        if patient[0] is None:
-            return jsonify({"message": "Patient already has no assigned doctor."}), 200
-
-        # Then, remove the doctor
-        cursor.execute("""
-            UPDATE PATIENT
-            SET doctor_id = NULL
-            WHERE patient_id = %s
-        """, (patient_id,))
-        mysql.connection.commit()
-
-        return jsonify({"message": "Doctor successfully removed from patient."}), 200
-
-    except Exception as e:
-        print(f"Exception: {e}")
-        mysql.connection.rollback()
-        return jsonify({"error": str(e)}), 400
-
     finally:
         cursor.close()
 
@@ -871,6 +701,228 @@ WHERE PA.patient_appt_id = %s
         return jsonify(result), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+#-------------------------BILL ENDPOINTS ------------------------------------------------
+# add a patient's bill - tested 
+@patient_bp.route('/patient/bill', methods=['POST'])
+def add_patient_bill():
+    data = request.get_json()
+    appt_id = data.get('appt_id')
+
+    if not isinstance(appt_id, int):
+        return jsonify({"error": "appt_id must be an integer."}), 400
+
+    cursor = mysql.connection.cursor()
+
+    try:
+        # Get patient_id and doctor_bill
+        cursor.execute("""
+            SELECT pa.patient_id, d.payment_fee
+            FROM PATIENT_APPOINTMENT pa
+            JOIN DOCTOR d ON pa.doctor_id = d.doctor_id
+            WHERE pa.patient_appt_id = %s
+        """, (appt_id,))
+        result = cursor.fetchone()
+        if not result:
+            return jsonify({"error": "Invalid appt_id or doctor not found."}), 404
+
+        patient_id, doctor_bill = result
+        doctor_bill = float(doctor_bill)
+
+        # Get pharm_bill
+        cursor.execute("""
+            SELECT IFNULL(SUM(pp.quantity * m.medicine_price), 0)
+            FROM PATIENT_PRESCRIPTION pp
+            JOIN MEDICINE m ON pp.medicine_id = m.medicine_id
+            WHERE pp.appt_id = %s
+        """, (appt_id,))
+        pharm_result = cursor.fetchone()
+        pharm_bill = float(pharm_result[0]) if pharm_result else 0.0
+
+        # Determine appointment count for article naming
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM PATIENT_BILL pb
+            JOIN PATIENT_APPOINTMENT pa ON pb.appt_id = pa.patient_appt_id
+            WHERE pa.patient_id = %s
+        """, (patient_id,))
+        count_result = cursor.fetchone()
+        appt_number = (count_result[0] or 0) + 1
+        article_name = f"Appt {appt_number}"
+
+        # Insert the new bill (charge only)
+        current_bill = doctor_bill + pharm_bill
+        cursor.execute("""
+            INSERT INTO PATIENT_BILL (appt_id, doctor_bill, pharm_bill, current_bill, article)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (appt_id, doctor_bill, pharm_bill, current_bill, article_name))
+
+        # Calculate updated balance
+        cursor.execute("""
+            SELECT
+                (SELECT IFNULL(SUM(amount), 0) FROM PATIENT_CREDIT WHERE patient_id = %s)
+                -
+                (SELECT IFNULL(SUM(charge), 0)
+                 FROM PATIENT_BILL pb
+                 JOIN PATIENT_APPOINTMENT pa ON pb.appt_id = pa.patient_appt_id
+                 WHERE pa.patient_id = %s)
+        """, (patient_id, patient_id))
+        balance_result = cursor.fetchone()
+        balance = float(balance_result[0]) if balance_result else 0.0
+
+        # Update the patient's acct_balance
+        cursor.execute("""
+            UPDATE PATIENT
+            SET acct_balance = %s
+            WHERE patient_id = %s
+        """, (balance, patient_id))
+
+        mysql.connection.commit()
+
+        return jsonify({
+            "message": "Bill recorded successfully.",
+            "appt_id": appt_id,
+            "doctor_bill": doctor_bill,
+            "pharm_bill": pharm_bill,
+            "current_bill": current_bill,
+            "article": article_name,
+            "balance": balance
+        }), 201
+
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()
+
+# get bills for patient - needs to be updated
+@patient_bp.route('/patient/<int:patient_id>/bills', methods=['GET'])
+def get_all_bills_for_patient(patient_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT 
+            pb.bill_id, pb.appt_id, pb.doctor_bill, pb.pharm_bill, pb.charge, 
+            pb.credit, pb.current_bill, p.article, pb.created_at
+        FROM 
+            PATIENT_BILL pb
+        JOIN 
+            PATIENT_APPOINTMENT pa ON pb.appt_id = pa.patient_appt_id
+        WHERE 
+            pa.patient_id = %s
+        ORDER BY 
+            pb.created_at DESC
+    """
+
+    try:
+        cursor.execute(query, (patient_id,))
+        results = cursor.fetchall()
+
+        if not results:
+            return jsonify({"message": "No bills found for this patient."}), 200
+
+        bills = []
+        for row in results:
+            bills.append({
+                "bill_id": row[0],
+                "appt_id": row[1],
+                "doctor_bill": float(row[2]),
+                "pharm_bill": float(row[3]),
+                "charge": float(row[4]),
+                "credit": float(row[5]),
+                "current_bill": float(row[6]),
+                "created_at": row[7].isoformat()
+            })
+
+        return jsonify(bills), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()
+
+# make a payment - take in credit - tested 
+@patient_bp.route('/patient/<int:patient_id>/payment', methods=['POST'])
+def make_general_payment(patient_id):
+    data = request.get_json()
+    credit = data.get('credit')
+
+    if not isinstance(credit, (int, float)) or credit <= 0:
+        return jsonify({"error": "credit must be a positive number."}), 400
+
+    cursor = mysql.connection.cursor()
+
+    try:
+        # Check if patient exists
+        cursor.execute("""
+            SELECT 1 FROM PATIENT WHERE patient_id = %s
+        """, (patient_id,))
+        if not cursor.fetchone():
+            return jsonify({"error": "Invalid patient_id."}), 404
+
+        # Compute current balance
+        cursor.execute("""
+            SELECT
+                (SELECT IFNULL(SUM(amount), 0) FROM PATIENT_CREDIT WHERE patient_id = %s)
+                -
+                (SELECT IFNULL(SUM(charge), 0)
+                 FROM PATIENT_BILL pb
+                 JOIN PATIENT_APPOINTMENT pa ON pb.appt_id = pa.patient_appt_id
+                 WHERE pa.patient_id = %s)
+        """, (patient_id, patient_id))
+        balance_result = cursor.fetchone()
+        current_balance = float(balance_result[0]) if balance_result else 0.0
+
+        # Prevent overpayment
+        if credit + current_balance > 0:
+            return jsonify({
+                "error": "Payment exceeds outstanding balance.",
+                "current_balance": current_balance,
+                "requested_payment": credit,
+                "maximum_allowed": -current_balance
+            }), 400
+
+        # Insert credit payment
+        cursor.execute("""
+            INSERT INTO PATIENT_CREDIT (patient_id, amount)
+            VALUES (%s, %s)
+        """, (patient_id, credit))
+
+        # Recalculate balance after payment
+        cursor.execute("""
+            SELECT
+                (SELECT IFNULL(SUM(amount), 0) FROM PATIENT_CREDIT WHERE patient_id = %s)
+                -
+                (SELECT IFNULL(SUM(charge), 0)
+                 FROM PATIENT_BILL pb
+                 JOIN PATIENT_APPOINTMENT pa ON pb.appt_id = pa.patient_appt_id
+                 WHERE pa.patient_id = %s)
+        """, (patient_id, patient_id))
+        updated_balance_result = cursor.fetchone()
+        updated_balance = float(updated_balance_result[0]) if updated_balance_result else 0.0
+
+        # Update the patient's acct_balance
+        cursor.execute("""
+            UPDATE PATIENT
+            SET acct_balance = %s
+            WHERE patient_id = %s
+        """, (updated_balance, patient_id))
+
+        mysql.connection.commit()
+
+        return jsonify({
+            "message": "General payment recorded successfully.",
+            "patient_id": patient_id,
+            "credit": credit,
+            "article": "Credit Card Payment",
+            "new_balance": updated_balance
+        }), 201
+
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()
 
 # -------------------- GENERAL PATIENT ENDPOINTS----------------------------------
 # get a patient's prescription based on appt id

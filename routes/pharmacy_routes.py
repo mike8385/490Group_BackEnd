@@ -110,7 +110,7 @@ def login_pharmacy():
     cursor = mysql.connection.cursor()
 
     # Query to fetch pharmacy details based on email
-    query = "SELECT pharmacy_id, email, password FROM pharmacy WHERE email = %s"
+    query = "SELECT pharmacy_id, email, password FROM PHARMACY WHERE email = %s"
     cursor.execute(query, (email,))
     pharmacy = cursor.fetchone()
 

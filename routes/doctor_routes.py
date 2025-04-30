@@ -181,7 +181,7 @@ def get_all_doctors():
         SELECT doctor_id, first_name, last_name, email, description, license_num,
                license_exp_date, dob, med_school, specialty, years_of_practice, payment_fee,
                gender, phone_number, address, zipcode, city, state, doctor_picture, password,
-               created_at, updated_at
+               accepting_patients, created_at, updated_at
         FROM DOCTOR
     """
     cursor.execute(query)
@@ -215,7 +215,8 @@ def get_all_doctors():
             "city": doc[16],
             "state": doc[17],
             "password": doc[18],
-            "doctor_picture": doctor_picture
+            "doctor_picture": doctor_picture,
+            "accepting_patients" : doc[20]
         })
 
     return jsonify(result), 200
@@ -410,3 +411,44 @@ def get_doctor_average_rating(doctor_id):
         return jsonify({"error": str(e)}), 400
     finally:
         cursor.close()
+
+@doctor_bp.route('/doc_patients/<int:doctor_id>', methods=['GET'])
+def get_patients_by_doctor(doctor_id):
+    cursor = mysql.connection.cursor()
+    query = """
+        SELECT patient_id, doctor_id, patient_email,
+               first_name, last_name, pharmacy_id, profile_pic,
+               insurance_provider, insurance_policy_number, insurance_expiration_date,
+               acct_balance, created_at, updated_at
+        FROM PATIENT
+        WHERE doctor_id = %s
+    """
+    cursor.execute(query, (doctor_id,))
+    patients = cursor.fetchall()
+    cursor.close()
+
+    result = []
+    for pat in patients:
+        profile_pic = pat[6]
+        if profile_pic:
+            if isinstance(profile_pic, str):
+                profile_pic = profile_pic.encode('utf-8')
+            profile_pic = base64.b64encode(profile_pic).decode('utf-8')
+
+        result.append({
+            "patient_id": pat[0],
+            "doctor_id": pat[1],
+            "patient_email": pat[2],
+            "first_name": pat[3],
+            "last_name": pat[4],
+            "pharmacy_id": pat[5],
+            "profile_pic": profile_pic,
+            "insurance_provider": pat[7],
+            "insurance_policy_number": pat[8],
+            "insurance_expiration_date": str(pat[9]),
+            "acct_balance": float(pat[10]),
+            "created_at": str(pat[11]),
+            "updated_at": str(pat[12])
+        })
+
+    return jsonify(result), 200 if result else 404

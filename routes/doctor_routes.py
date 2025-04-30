@@ -80,7 +80,7 @@ def get_doctor(doctor_id):
         SELECT doctor_id, first_name, last_name, email, description, license_num,
                license_exp_date, dob, med_school, specialty, years_of_practice, payment_fee,
                gender, phone_number, address, zipcode, city, state, doctor_picture,
-               doctor_rating, accepting_patients
+               accepting_patients, doctor_rating
         FROM DOCTOR
         WHERE doctor_id = %s
     """
@@ -115,7 +115,7 @@ def get_doctor(doctor_id):
             "state": doctor[17],
             "doctor_picture": doctor_picture,
             "accepting_patients": doctor[19],
-            #"doctor_rating": doctor[20]
+            "doctor_rating": doctor[20],
         }), 200
     else:
         return jsonify({"error": "Doctor not found"}), 404

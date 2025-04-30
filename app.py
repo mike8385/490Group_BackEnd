@@ -1,6 +1,7 @@
 from flask import Flask
 from flask_cors import CORS
 from db import mysql
+from flasgger import Swagger
 import config
 
 # Blueprints
@@ -13,6 +14,8 @@ from routes.testing import test_bp
 
 app = Flask(__name__)
 CORS(app)
+
+swagger = Swagger(app)
 
 # MySQL config
 app.config['MYSQL_HOST'] = config.MYSQL_HOST

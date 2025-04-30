@@ -245,6 +245,7 @@ def get_patient_init_survey(patient_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+"""
 
 # ----------------- PATIENT x DOCTOR ENDPOINTS -------------------------
 @patient_bp.route('/select-doctor', methods=['POST'])
@@ -345,6 +346,8 @@ def login_patient():
         cursor.close()
 '''
 
+""" 
+
 @patient_bp.route('/login-patient', methods=['POST'])
 def login_patient():
     data = request.get_json()
@@ -363,6 +366,18 @@ def login_patient():
         return jsonify({"error": "Patient not found"}), 404
 
 #---------------------------- DAILY + WEEKLY SURVEY END POINTS ------------------------------------
+
+    cursor = mysql.connection.cursor()
+
+    query = "SELECT patient_id FROM PATIENT WHERE patient_email = %s"
+    cursor.execute(query, (email,))
+    patient = cursor.fetchone()
+
+    if patient:
+        return jsonify({"message": "Login successful", "patient_id": patient[0]}), 200
+    else:
+        return jsonify({"error": "Patient not found"}), 404 
+    
 # add to daily survey
 @patient_bp.route('/daily-survey', methods=['POST'])
 def add_daily_survey():
@@ -409,6 +424,7 @@ def get_daily_surveys(patient_id):
     query = """
         SELECT * FROM PATIENT_DAILY_SURVEY
         WHERE patient_id = %s
+        ORDER BY date ASC
         ORDER BY date ASC
     """
     

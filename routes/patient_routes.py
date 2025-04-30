@@ -422,7 +422,6 @@ def get_daily_surveys(patient_id):
         SELECT * FROM PATIENT_DAILY_SURVEY
         WHERE patient_id = %s
         ORDER BY date ASC
-        ORDER BY date ASC
     """
     
     try:

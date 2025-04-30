@@ -1,13 +1,13 @@
 from flask import Blueprint, request, jsonify
 from db import mysql
 import bcrypt, base64
-from google.cloud import storage
+# from google.cloud import storage
 import time
 
 doctor_bp = Blueprint('doctor_bp', __name__)
 
-GCS_BUCKET = "clinic-db-bucket"
-storage_client = storage.Client()
+# GCS_BUCKET = "clinic-db-bucket"
+# storage_client = storage.Client()
 @doctor_bp.route('/register-doctor', methods=['POST'])
 def register_doctor():
     data = request.get_json()
@@ -16,24 +16,24 @@ def register_doctor():
     password = data['password']
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
-    doctor_picture_url = None
+    # doctor_picture_url = None
 
     #for the picture i'm still not sure
     doctor_picture = data.get('doctor_picture')  # Base64 encoded image data
 
     # saving data into GCS bucket. it saves the url in the db instead of binary data.
-    if doctor_picture:
-        try:
-            # Decode the base64 string to binary data
-            doctor_picture = base64.b64decode(doctor_picture)
-            filename = f"doctors/{data['first_name']}_{int(time.time())}.png"
-            bucket = storage_client.bucket(GCS_BUCKET)
-            blob = bucket.blob(filename)
-            blob.upload_from_string(doctor_picture, content_type='image/png')
-            # blob.make_public()
-            doctor_picture_url = blob.public_url
-        except Exception as e:
-            return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
+    # if doctor_picture:
+    #     try:
+    #         # Decode the base64 string to binary data
+    #         doctor_picture = base64.b64decode(doctor_picture)
+    #         filename = f"doctors/{data['first_name']}_{int(time.time())}.png"
+    #         bucket = storage_client.bucket(GCS_BUCKET)
+    #         blob = bucket.blob(filename)
+    #         blob.upload_from_string(doctor_picture, content_type='image/png')
+    #         # blob.make_public()
+    #         doctor_picture_url = blob.public_url
+    #     except Exception as e:
+    #         return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
     cursor = mysql.connection.cursor()
     query = """
         INSERT INTO DOCTOR (
@@ -62,7 +62,8 @@ def register_doctor():
         data['zipcode'],
         data['city'],
         data['state'],
-        doctor_picture_url  # saving url instead of binary data
+        data.get('doctor_picture')
+        # doctor_picture_url  # saving url instead of binary data
     )
     try:
         cursor.execute(query, values)

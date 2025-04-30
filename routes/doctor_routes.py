@@ -115,7 +115,7 @@ def get_doctor(doctor_id):
             "state": doctor[17],
             "doctor_picture": doctor_picture,
             "accepting_patients": doctor[19],
-            "doctor_rating": doctor[20]
+            #"doctor_rating": doctor[20]
         }), 200
     else:
         return jsonify({"error": "Doctor not found"}), 404

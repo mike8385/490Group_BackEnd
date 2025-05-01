@@ -6,6 +6,61 @@ pharmacy_bp = Blueprint('pharmacy_bp', __name__)
 
 @pharmacy_bp.route('/register-pharmacy', methods=['POST'])
 def register_pharmacy():
+    """
+    Register a new pharmacy
+
+    ---
+    tags:
+      - Pharmacy
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - email
+              - address
+              - zipcode
+              - city
+              - state
+              - pharmacy_name
+              - store_hours
+              - password
+            properties:
+              email:
+                type: string
+                format: email
+              address:
+                type: string
+              zipcode:
+                type: string
+              city:
+                type: string
+              state:
+                type: string
+              pharmacy_name:
+                type: string
+              store_hours:
+                type: string
+              password:
+                type: string
+                format: password
+          example:
+            email: "pharmacy@example.com"
+            address: "123 Health St"
+            zipcode: "10001"
+            city: "New York"
+            state: "NY"
+            pharmacy_name: "Wellness RX"
+            store_hours: "Mon-Fri: 9 AM - 9 PM"
+            password: "securePass123"
+    responses:
+      201:
+        description: Pharmacy registered successfully
+      400:
+        description: Registration failed
+    """
     data = request.get_json()
 
     # Hash the pharmacy password before storing it
@@ -39,6 +94,36 @@ def register_pharmacy():
 
 @pharmacy_bp.route('/pharmacy/<int:pharmacy_id>', methods=['GET'])
 def get_pharmacy(pharmacy_id):
+    """
+    Get pharmacy information by ID
+
+    ---
+    tags:
+      - Pharmacy
+    parameters:
+      - name: pharmacy_id
+        in: path
+        required: true
+        type: integer
+    responses:
+      200:
+        description: Pharmacy details retrieved
+        content:
+          application/json:
+            example:
+              pharmacy_id: 1
+              pharmacy_name: "Wellness RX"
+              email: "pharmacy@example.com"
+              address: "123 Health St"
+              zipcode: "10001"
+              city: "New York"
+              state: "NY"
+              store_hours: "Mon-Fri: 9 AM - 9 PM"
+      404:
+        description: Pharmacy not found
+      400:
+        description: Retrieval failed
+    """
     cursor = mysql.connection.cursor()
 
     query = """
@@ -103,6 +188,42 @@ def login_pharmacy():
 #pharmacy login
 @pharmacy_bp.route('/login-pharmacy', methods=['POST'])
 def login_pharmacy():
+    """
+    Authenticate a pharmacy by email and password
+
+    ---
+    tags:
+      - Pharmacy
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - email
+              - password
+            properties:
+              email:
+                type: string
+                format: email
+              password:
+                type: string
+                format: password
+          example:
+            email: "pharmacy@example.com"
+            password: "securePass123"
+    responses:
+      200:
+        description: Login successful
+        content:
+          application/json:
+            example:
+              message: Login successful
+              pharmacy_id: 1
+      404:
+        description: Pharmacy not found
+    """
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
@@ -123,6 +244,29 @@ def login_pharmacy():
 
 @pharmacy_bp.route('/medicine/<int:medicine_id>', methods=['GET'])
 def get_medicine(medicine_id):
+    """
+    Get medicine information by ID
+
+    ---
+    tags:
+      - Medicine
+    parameters:
+      - name: medicine_id
+        in: path
+        required: true
+        type: integer
+    responses:
+      200:
+        description: Medicine details retrieved
+        content:
+          application/json:
+            example:
+              medicine_id: 2
+              medicine_name: "Ibuprofen"
+              medicine_price: 5.99
+      404:
+        description: Medicine not found
+    """
     cursor = mysql.connection.cursor()
     query = """
         SELECT medicine_id, medicine_name, medicine_price
@@ -144,6 +288,24 @@ def get_medicine(medicine_id):
 #get all of stock (by pharmacy id)
 @pharmacy_bp.route('/stock/<int:pharmacy_id>', methods=['GET'])
 def get_stock(pharmacy_id):
+    """
+    Retrieve all medicine stock for a specific pharmacy
+
+    ---
+    tags:
+      - Inventory
+    parameters:
+      - name: pharmacy_id
+        in: path
+        type: integer
+        required: true
+        description: ID of the pharmacy
+    responses:
+      200:
+        description: Stock list retrieved
+      404:
+        description: No stock found for this pharmacy
+    """
     cursor = mysql.connection.cursor()
     query = """
         SELECT 
@@ -176,6 +338,43 @@ def get_stock(pharmacy_id):
 # update stock - based on pharmacy, medicine id, and quantity to add
 @pharmacy_bp.route('/stock/update', methods=['PUT'])
 def update_stock():
+    """
+    Update stock count for a specific medicine in a pharmacy
+
+    ---
+    tags:
+      - Inventory
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - pharmacy_id
+              - medicine_id
+              - quantity_to_add
+            properties:
+              pharmacy_id:
+                type: integer
+              medicine_id:
+                type: integer
+              quantity_to_add:
+                type: integer
+          example:
+            pharmacy_id: 1
+            medicine_id: 3
+            quantity_to_add: 50
+    responses:
+      200:
+        description: Stock updated successfully
+      400:
+        description: Invalid input
+      404:
+        description: Stock record not found
+      500:
+        description: Database update failed
+    """
     data = request.get_json()
     pharmacy_id = data.get('pharmacy_id')
     medicine_id = data.get('medicine_id')
@@ -220,6 +419,26 @@ def update_stock():
 # get all pharmacies
 @pharmacy_bp.route('/pharmacies', methods=['GET'])
 def get_pharmacies():
+    """
+    Retrieve all registered pharmacies
+
+    ---
+    tags:
+      - Pharmacy
+    responses:
+      200:
+        description: List of pharmacies
+        content:
+          application/json:
+            example:
+              - id: 1
+                name: "Wellness RX"
+                address: "123 Health St"
+                zipcode: "10001"
+                city: "New York"
+      500:
+        description: Retrieval failed
+    """
     cursor = mysql.connection.cursor()
     try:
         cursor.execute("SELECT pharmacy_id, pharmacy_name, address, zipcode, city FROM PHARMACY")
@@ -242,6 +461,33 @@ def get_pharmacies():
 # update a patient's prescription to filled if filled is clicked
 @pharmacy_bp.route('/prescription/fill', methods=['PUT'])
 def fill_prescription():
+    """
+    Fill a prescription and deduct from pharmacy stock
+
+    ---
+    tags:
+      - Prescription
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - prescription_id
+            properties:
+              prescription_id:
+                type: integer
+          example:
+            prescription_id: 15
+    responses:
+      200:
+        description: Prescription filled and stock updated
+      400:
+        description: Insufficient stock or validation failed
+      404:
+        description: Prescription or stock not found
+    """
     data = request.get_json()
     prescription_id = data.get('prescription_id')
 
@@ -308,6 +554,22 @@ def fill_prescription():
 
 @pharmacy_bp.route('/all_meds', methods=['GET'])
 def get_all_medicines():
+    """
+    Get list of all medicines available in the system
+
+    ---
+    tags:
+      - Medicine
+    responses:
+      200:
+        description: List of medicines
+        content:
+          application/json:
+            example:
+              - medicine_id: 1
+                medicine_name: "Ibuprofen"
+                medicine_price: 5.99
+    """
     cursor = mysql.connection.cursor()
 
     query = """
@@ -332,6 +594,27 @@ def get_all_medicines():
 
 @pharmacy_bp.route('/pickup/<int:pharmacy_id>', methods=['GET'])
 def get_pickups_for_pharmacy(pharmacy_id):
+    """
+    Get list of filled prescriptions not yet picked up for a pharmacy
+
+    ---
+    tags:
+      - Prescription
+    parameters:
+      - name: pharmacy_id
+        in: path
+        required: true
+        type: integer
+    responses:
+      200:
+        description: List of prescriptions ready for pickup
+        content:
+          application/json:
+            example:
+              - patient_name: "John Doe"
+                medicine_name: "Lisinopril"
+                quantity: 30
+    """
     cursor = mysql.connection.cursor()
 
     query = """
@@ -362,6 +645,16 @@ def get_pickups_for_pharmacy(pharmacy_id):
 
 @pharmacy_bp.route('/all_prescriptions', methods=['GET'])
 def get_all_prescriptions():
+    """
+    Retrieve all prescriptions from the system
+
+    ---
+    tags:
+      - Prescription
+    responses:
+      200:
+        description: Full prescription list
+    """
     cursor = mysql.connection.cursor()
 
     query = """
@@ -390,6 +683,30 @@ def get_all_prescriptions():
 
 @pharmacy_bp.route('/unfilled_prescriptions/<int:pharmacy_id>', methods=['GET'])
 def get_unfilled_prescriptions(pharmacy_id):
+    """
+    Retrieve all unfilled prescriptions for a specific pharmacy
+
+    ---
+    tags:
+      - Prescription
+    parameters:
+      - name: pharmacy_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: List of unfilled prescriptions
+        content:
+          application/json:
+            example:
+              - prescription_id: 101
+                doctor_name: "Dr. Jane Smith"
+                patient_name: "John Doe"
+                medication: "Atorvastatin"
+                quantity: 30
+                filled: 0
+    """
     cursor = mysql.connection.cursor()
 
     query = """

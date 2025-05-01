@@ -716,6 +716,25 @@ WHERE PA.patient_appt_id = %s
         return jsonify(result), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+    
+# cancel appointment
+@patient_bp.route('/cancel-appointment/<int:appointment_id>', methods=['DELETE'])
+def cancel_appointment(appointment_id):
+    cursor = mysql.connection.cursor()
+
+    query = "DELETE FROM patient_appointment WHERE patient_appt_id = %s"
+
+    try:
+        cursor.execute(query, (appointment_id,))
+        mysql.connection.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({"message": "Appointment not found."}), 404
+
+        return jsonify({"message": "Appointment cancelled successfully."}), 200
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
 
 #-------------------------BILL ENDPOINTS ------------------------------------------------
 # add a patient's bill - tested 

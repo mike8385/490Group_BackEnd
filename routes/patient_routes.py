@@ -365,7 +365,7 @@ def get_patient_init_survey(patient_id):
                 weight:
                   type: number
                   format: float
-                allergies:
+                dietary_restrictions:
                   type: string
                 blood_type:
                   type: string
@@ -392,24 +392,28 @@ def get_patient_init_survey(patient_id):
 
     query = """
         SELECT 
-            is_id,
-            patient_id,
-            mobile_number,
-            dob,
-            gender,
-            height,
-            weight,
-            allergies,
-            blood_type,
-            patient_address,
-            patient_zipcode,
-            patient_city,
-            patient_state,
-            medical_conditions,
-            family_history,
-            past_procedures
-        FROM PATIENT_INIT_SURVEY
-        WHERE patient_id = %s
+            pis.is_id,
+            pis.patient_id,
+            pis.mobile_number,
+            pis.dob,
+            pis.gender,
+            pis.height,
+            pis.weight,
+            pis.dietary_restrictions,
+            pis.blood_type,
+            pis.patient_address,
+            pis.patient_zipcode,
+            pis.patient_city,
+            pis.patient_state,
+            pis.medical_conditions,
+            pis.family_history,
+            pis.past_procedures,
+            p.patient_email,
+            p.first_name,
+            p.last_name
+        FROM PATIENT as p
+        JOIN PATIENT_INIT_SURVEY as pis ON p.patient_id = pis.patient_id
+        WHERE p.patient_id = %s
     """
 
     try:
@@ -419,9 +423,9 @@ def get_patient_init_survey(patient_id):
         if result:
             keys = [
                 'is_id', 'patient_id', 'mobile_number', 'dob', 'gender',
-                'height', 'weight', 'allergies', 'blood_type', 'patient_address',
+                'height', 'weight', 'dietary_restrictions', 'blood_type', 'patient_address',
                 'patient_zipcode', 'patient_city', 'patient_state', 'medical_conditions',
-                'family_history', 'past_procedures'
+                'family_history', 'past_procedures', 'patient_email', 'first_name', 'last_name'
             ]
             survey_info = dict(zip(keys, result))
             return jsonify(survey_info), 200
@@ -1557,76 +1561,74 @@ def add_patient_bill():
 @patient_bp.route('/patient/<int:patient_id>/bills', methods=['GET'])
 def get_all_bills_for_patient(patient_id):
     """
-    Retrieve all billing records for a patient
-
-    ---
-    tags:
-      - Billing
-    parameters:
-      - name: patient_id
-        in: path
-        required: true
-        type: integer
-        description: ID of the patient
-    responses:
-      200:
-        description: Billing records retrieved
-        content:
-          application/json:
-            example:
-              - bill_id: 1
-                appt_id: 42
-                doctor_bill: 75.0
-                pharm_bill: 45.0
-                charge: 120.0
-                credit: 0.0
-                current_bill: 120.0
-                created_at: "2025-05-01T13:45:00"
-      400:
-        description: Retrieval error
+    Retrieve all billing records (charges and credits) with running balance for a patient
     """
     cursor = mysql.connection.cursor()
 
+    # Combined query: bills and credits ordered by created_at
     query = """
-        SELECT 
-            pb.bill_id, pb.appt_id, pb.doctor_bill, pb.pharm_bill, pb.charge, 
-            pb.credit, pb.current_bill, p.article, pb.created_at
-        FROM 
-            PATIENT_BILL pb
-        JOIN 
-            PATIENT_APPOINTMENT pa ON pb.appt_id = pa.patient_appt_id
-        WHERE 
-            pa.patient_id = %s
-        ORDER BY 
-            pb.created_at DESC
+        (
+            SELECT 
+                pb.bill_id AS id,
+                'charge' AS type,
+                CAST(pb.article AS CHAR) AS article,
+                pb.created_at,
+                pb.doctor_bill,
+                pb.pharm_bill,
+                NULL AS credit,
+                pb.charge
+            FROM PATIENT_BILL pb
+            JOIN PATIENT_APPOINTMENT pa ON pb.appt_id = pa.patient_appt_id
+            WHERE pa.patient_id = %s
+        )
+        UNION ALL
+        (
+            SELECT 
+                pc.credit_id AS id,
+                'credit' AS type,
+                'credit' AS article,
+                pc.created_at,
+                NULL AS doctor_bill,
+                NULL AS pharm_bill,
+                pc.amount AS credit,
+                0.00 AS charge
+            FROM PATIENT_CREDIT pc
+            WHERE pc.patient_id = %s
+        )
+        ORDER BY created_at
     """
 
     try:
-        cursor.execute(query, (patient_id,))
-        results = cursor.fetchall()
-
-        if not results:
-            return jsonify({"message": "No bills found for this patient."}), 200
+        cursor.execute(query, (patient_id, patient_id))
+        rows = cursor.fetchall()
+        cursor.close()
 
         bills = []
-        for row in results:
+        balance = 0.0
+
+        for row in rows:
+            row_id, row_type, article, created_at, doctor_bill, pharm_bill, credit, charge = row
+
+            if row_type == "credit":
+                balance += float(credit)
+            else:  # it's a charge
+                balance -= float(charge)
+
             bills.append({
-                "bill_id": row[0],
-                "appt_id": row[1],
-                "doctor_bill": float(row[2]),
-                "pharm_bill": float(row[3]),
-                "charge": float(row[4]),
-                "credit": float(row[5]),
-                "current_bill": float(row[6]),
-                "created_at": row[7].isoformat()
+                "id": row_id,
+                "article": article,
+                "created_at": created_at.isoformat(),
+                "doctor_bill": float(doctor_bill) if doctor_bill is not None else "",
+                "pharm_bill": float(pharm_bill) if pharm_bill is not None else "",
+                "credit": float(credit) if credit is not None else "",
+                "current_bill": round(balance, 2)
             })
 
         return jsonify(bills), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
-    finally:
-        cursor.close()
+
 
 # make a payment - take in credit - tested 
 @patient_bp.route('/patient/<int:patient_id>/payment', methods=['POST'])
@@ -1920,7 +1922,7 @@ def edit_patient():
                 type: number
               blood_type:
                 type: string
-              allergies:
+              dietary_restrictions:
                 type: string
               activity:
                 type: number
@@ -1948,7 +1950,7 @@ def edit_patient():
             height: 180.5
             weight: 75.0
             blood_type: "O+"
-            allergies: "Peanuts"
+            dietary_restrictions: "Peanuts"
             activity: 3.5
             health_conditions: "Asthma"
             family_history: "Diabetes"
@@ -1978,7 +1980,7 @@ def edit_patient():
     height = data.get('height')
     weight = data.get('weight')
     blood_type = data.get('blood_type')
-    allergies = data.get('allergies') 
+    dietary_restrictions = data.get('dietary_restrictions') 
     activity = data.get('activity') 
     medical_conditions = data.get('health_conditions')
     family_history = data.get('family_history')
@@ -2007,7 +2009,7 @@ def edit_patient():
             WHERE patient_id = %s
         """, (
             phone, dob, gender, height, weight,
-            allergies, activity, blood_type,
+            dietary_restrictions, activity, blood_type,
             address, zipcode, city, state,
             medical_conditions, family_history, past_procedures,
             patient_id

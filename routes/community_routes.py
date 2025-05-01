@@ -11,6 +11,29 @@ comm_bp = Blueprint('comm_bp', __name__)
 # get liked posts /posts/liked?patient_id=5
 @comm_bp.route('/posts/liked', methods=['GET'])
 def get_liked_posts():
+    """
+    Retrieve liked posts for a patient or doctor
+
+    ---
+    tags:
+      - Community
+    parameters:
+      - name: patient_id
+        in: query
+        type: integer
+        required: false
+      - name: doctor_id
+        in: query
+        type: integer
+        required: false
+    responses:
+      200:
+        description: List of liked posts
+      400:
+        description: Missing user identifier
+      404:
+        description: User not found
+    """
     patient_id = request.args.get('patient_id', type=int)
     doctor_id = request.args.get('doctor_id', type=int)
 
@@ -75,6 +98,39 @@ def get_liked_posts():
 # like a post, add it to liked post table
 @comm_bp.route('/posts/like', methods=['POST'])
 def like_post():
+    """
+    Like a community post
+
+    ---
+    tags:
+      - Community
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [post_id]
+            properties:
+              post_id:
+                type: integer
+              patient_id:
+                type: integer
+              doctor_id:
+                type: integer
+          example:
+            post_id: 5
+            patient_id: 1
+    responses:
+      201:
+        description: Post liked successfully
+      400:
+        description: Input error or database failure
+      404:
+        description: User not found
+      409:
+        description: Post already liked
+    """
     data = request.get_json()
     post_id = data.get('post_id')
     patient_id = data.get('patient_id')

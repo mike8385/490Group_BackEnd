@@ -324,9 +324,9 @@ def get_all_medicines():
             "medicine_id": med[0],
             "medicine_name": med[1],
             "medicine_price": float(med[2]),
-            #"description" : med[3],
-            #"side_effects" : med[4],
-            #"benefits" : med[5]
+            "description" : med[3],
+            "side_effects" : med[4],
+            "benefits" : med[5]
         })
 
     return jsonify(result), 200

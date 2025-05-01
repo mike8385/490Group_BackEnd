@@ -11,6 +11,15 @@ doctor_bp = Blueprint('doctor_bp', __name__)
 # storage_client = storage.Client()
 @doctor_bp.route('/register-doctor', methods=['POST'])
 def register_doctor():
+    """
+    Register a new doctor
+    ---
+    responses:
+      201:
+        description: Doctor registered successfully!
+      400:
+        description: Error based on what went wrong.
+    """
     data = request.get_json()
 
     # hash the password before storing it
@@ -76,6 +85,18 @@ def register_doctor():
 
 @doctor_bp.route('/doctor/<int:doctor_id>', methods=['GET'])
 def get_doctor(doctor_id):
+    """
+    Retrieve a doctor's information by their ID number
+    ---
+    responses:
+      200:
+        description: return doctor information including doctor_id, first_name, last_name, email, description, license_num,
+               license_exp_date, dob, med_school, specialty, years_of_practice, payment_fee,
+               gender, phone_number, address, zipcode, city, state, doctor_picture,
+               accepting_patients, doctor_rating
+      404:
+        description: Doctor not found.
+    """
     cursor = mysql.connection.cursor()
     query = """
         SELECT doctor_id, first_name, last_name, email, description, license_num,
@@ -123,6 +144,17 @@ def get_doctor(doctor_id):
 
 @doctor_bp.route('/login-doctor', methods=['POST'])
 def login_doctor():
+    """
+    Doctor Login
+    ---
+    responses:
+      200:
+        description: Login Successful with the Doctor ID.
+      401:
+        description: Invalid credentials.
+      404:
+        description: Doctor not found.
+    """
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
@@ -160,6 +192,15 @@ def login_doctor():
 
 @doctor_bp.route('/doctor/<int:doctor_id>', methods=['DELETE'])
 def delete_doctor(doctor_id):
+    """
+    Delete Doctor by their ID number
+    ---
+    responses:
+      200:
+        description: Doctor with denoted ID has been deleted.
+      404:
+        description: Doctor not found.
+    """
     cursor = mysql.connection.cursor()
 
     # check if the doctor exists
@@ -177,6 +218,13 @@ def delete_doctor(doctor_id):
 
 @doctor_bp.route('/doctors', methods=['GET'])
 def get_all_doctors():
+    """
+    Retrieve all doctors' information
+    ---
+    responses:
+      200:
+        description: Doctor with denoted ID's information is returned
+    """
     cursor = mysql.connection.cursor()
     query = """
         SELECT doctor_id, first_name, last_name, email, description, license_num,
@@ -225,6 +273,15 @@ def get_all_doctors():
 # get appointments by doctor
 @doctor_bp.route('/doc-appointments/<int:doctor_id>', methods=['GET'])
 def get_appointments_by_doctor(doctor_id):
+    """
+    Get appointments by doctor ID
+    ---
+    responses:
+      200:
+        description: Information about the appointments is returned
+      400:
+        description: Error message based on what went wrong.
+    """
     cursor = mysql.connection.cursor()
 
     query = """
@@ -260,6 +317,17 @@ def get_appointments_by_doctor(doctor_id):
 # doctor accepts an appointment [1], else default 0
 @doctor_bp.route('/doc-appointments-status/<int:appointment_id>', methods=['PATCH'])
 def update_appointment_status(appointment_id):
+    """
+    Returns if doctor is accepting an appointment and changes the status.
+    ---
+    responses:
+      200:
+        description: Appointment status updated successfully
+      400:
+        description: Error message based on what went wrong.
+      400: 
+        description: Invalid status. 'accepted' must be 0 (deny) or 1 (accept).
+    """
     data = request.get_json()
     new_status = data.get('accepted')
 
@@ -285,6 +353,19 @@ def update_appointment_status(appointment_id):
 # doctor adds a prescription for a patient
 @doctor_bp.route('/prescription/add', methods=['POST'])
 def add_prescription():
+    """
+    Prescribe a medicine to a patient with the quantity
+    ---
+    responses:
+      200:
+        description: Prescription added successfully.
+      400:
+        description: patient_id, medicine_id, and quantity are required.
+      400:
+        description: quantity must be a positive integer.
+      400:
+        description: Error message based on what went wrong.
+    """
     data = request.get_json()
     patient_id = data.get('patient_id')
     medicine_id = data.get('medicine_id')
@@ -321,6 +402,17 @@ def add_prescription():
 # accepting patients - general
 @doctor_bp.route('/doctor-accepting-status/<int:doctor_id>', methods=['PATCH'])
 def update_accepting_status(doctor_id):
+    """
+    Handles if doctor is accepting patients or not.
+    ---
+    responses:
+      200:
+        description: Doctor's accepting status updated successfully.
+      404:
+        description: Doctor not found or no change made.
+      400:
+        description: Error message based on what went wrong.
+    """
     data = request.get_json()
     new_status = data.get('accepting_patients')
 
@@ -350,6 +442,17 @@ def update_accepting_status(doctor_id):
 # add appointment notes
 @doctor_bp.route('/appointment/<int:appt_id>/add_note', methods=['PATCH'])
 def add_appointment_note(appt_id):
+    """
+    Handles if doctor is accepting patients or not.
+    ---
+    responses:
+      200:
+        description: Doctor's appointment note added successfully, with the appointment id and doctor appointment note.
+      404:
+        description: Appointment not found
+      400:
+        description: Error message based on what went wrong.
+    """
     data = request.get_json()
     note = data.get('doctor_appointment_note')
 
@@ -383,6 +486,17 @@ def add_appointment_note(appt_id):
 # get average doctor rating
 @doctor_bp.route('/doctor/<int:doctor_id>/rating', methods=['GET'])
 def get_doctor_average_rating(doctor_id):
+    """
+    Compute the average rating for a doctor based on patient appointments.
+    ---
+    responses:
+      200:
+        description: Average rating retrieved successfully with the doctor_id and average_rating.
+      200:
+        description: This doctor has no ratings yet with the doctor_id and the average_rating as None
+      400:
+        description: Error message based on what went wrong.
+    """
     cursor = mysql.connection.cursor()
 
     try:
@@ -415,6 +529,15 @@ def get_doctor_average_rating(doctor_id):
 
 @doctor_bp.route('/doc_patients/<int:doctor_id>', methods=['GET'])
 def get_patients_by_doctor(doctor_id):
+    """
+    Get all patients assigned to a specific doctor
+    ---
+    responses:
+      200:
+        description: return information about the doctor's patient based on the doctor id and patient id.
+      404:
+        description: Error, no description.
+    """
     cursor = mysql.connection.cursor()
     query = """
         SELECT p.patient_id, p.doctor_id, p.patient_email, pis.mobile_number,
@@ -464,6 +587,15 @@ def get_patients_by_doctor(doctor_id):
 
 @doctor_bp.route('/doc-past/<int:doctor_id>', methods=['GET'])
 def get_past_appointments_by_doctor(doctor_id):
+    """
+    Get past appointments by doctor ID
+    ---
+    responses:
+      200:
+        description: return information about the past appointments based on the doctor id and patient id.
+      400:
+        description: Error message based on what went wrong.
+    """
     cursor = mysql.connection.cursor()
 
     query = """
@@ -498,6 +630,15 @@ def get_past_appointments_by_doctor(doctor_id):
 
 @doctor_bp.route('/doc-upcoming/<int:doctor_id>', methods=['GET'])
 def get_upcoming_appointments_by_doctor(doctor_id):
+    """
+    Get upcoming appointments by doctor ID
+    ---
+    responses:
+      200:
+        description: return information about the upcoming appointments based on the doctor id and patient id.
+      400:
+        description: Error message based on what went wrong.
+    """
     cursor = mysql.connection.cursor()
 
     query = """
@@ -533,6 +674,17 @@ def get_upcoming_appointments_by_doctor(doctor_id):
 
 @doctor_bp.route('/request-prescription', methods=['POST'])
 def request_prescription():
+    """
+    Prescription request for a patient that goes to the pharmacy
+    ---
+    responses:
+      200:
+        description: Prescription request sent successfully.
+      400:
+        description: Missing required fields
+      500:
+        description: Error message based on what went wrong.
+    """
     data = request.json
     required_fields = ['appt_id', 'medicine_id', 'quantity']
 

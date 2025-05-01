@@ -1408,7 +1408,7 @@ def cancel_appointment(appointment_id):
     """
     cursor = mysql.connection.cursor()
 
-    query = "DELETE FROM patient_appointment WHERE patient_appt_id = %s"
+    query = "DELETE FROM PATIENT_APPOINTMENT WHERE patient_appt_id = %s"
 
     try:
         cursor.execute(query, (appointment_id,))

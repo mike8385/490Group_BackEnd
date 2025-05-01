@@ -256,7 +256,6 @@ def select_doctor():
         data['doctor_id'],
         data['patient_id']
     )
-
     try:
         cursor.execute(update_query, values)
         mysql.connection.commit()
@@ -739,6 +738,7 @@ def login_patient():
     finally:
         cursor.close()
 '''
+
 # #login patient w/o pw
 @patient_bp.route('/login-patient', methods=['POST'])
 def login_patient():
@@ -792,6 +792,7 @@ def login_patient():
         return jsonify({"message": "Login successful", "patient_id": patient[0]}), 200
     else:
         return jsonify({"error": "Patient not found"}), 404
+
 
 #---------------------------- DAILY + WEEKLY SURVEY END POINTS ------------------------------------    
 # add to daily survey
@@ -1420,6 +1421,32 @@ def rate_appointment():
         return jsonify({"error": str(e)}), 400
     finally:
         cursor.close()
+@patient_bp.route('/appointment/status/<int:appt_id>', methods=['GET'])
+def get_appointment_status(appt_id):
+    cursor = mysql.connection.cursor()
+
+    try:
+        # Query to get the rating for the specific appointment
+        cursor.execute("""
+            SELECT appt_rating
+            FROM PATIENT_APPOINTMENT
+            WHERE patient_appt_id = %s
+        """, (appt_id,))
+        result = cursor.fetchone()
+
+        if result:
+            # If appointment is found, return the rating
+            appt_rating = result[0]
+            return jsonify({
+                "appt_rating": appt_rating
+            }), 200
+        else:
+            return jsonify({"error": "Appointment not found."}), 404
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
 
 @patient_bp.route('/appointment/status/<int:appt_id>', methods=['GET'])
 def get_appointment_status(appt_id):
@@ -1513,6 +1540,44 @@ def update_prescription_pickup():
         cursor.execute(query, (prescription_id,))
         mysql.connection.commit()
         return jsonify({"message": "Prescription marked as picked up."}), 200
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+    
+# cancel appointment
+@patient_bp.route('/cancel-appointment/<int:appointment_id>', methods=['DELETE'])
+def cancel_appointment(appointment_id):
+    """
+    Cancel a scheduled appointment
+
+    ---
+    tags:
+      - Appointment
+    parameters:
+      - name: appointment_id
+        in: path
+        required: true
+        type: integer
+    responses:
+      200:
+        description: Appointment cancelled
+      404:
+        description: Appointment not found
+      400:
+        description: Deletion failed
+    """
+    cursor = mysql.connection.cursor()
+
+    query = "DELETE FROM patient_appointment WHERE patient_appt_id = %s"
+
+    try:
+        cursor.execute(query, (appointment_id,))
+        mysql.connection.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({"message": "Appointment not found."}), 404
+
+        return jsonify({"message": "Appointment cancelled successfully."}), 200
     except Exception as e:
         mysql.connection.rollback()
         return jsonify({"error": str(e)}), 400

@@ -1318,6 +1318,32 @@ def rate_appointment():
         return jsonify({"error": str(e)}), 400
     finally:
         cursor.close()
+@patient_bp.route('/appointment/status/<int:appt_id>', methods=['GET'])
+def get_appointment_status(appt_id):
+    cursor = mysql.connection.cursor()
+
+    try:
+        # Query to get the rating for the specific appointment
+        cursor.execute("""
+            SELECT appt_rating
+            FROM PATIENT_APPOINTMENT
+            WHERE patient_appt_id = %s
+        """, (appt_id,))
+        result = cursor.fetchone()
+
+        if result:
+            # If appointment is found, return the rating
+            appt_rating = result[0]
+            return jsonify({
+                "appt_rating": appt_rating
+            }), 200
+        else:
+            return jsonify({"error": "Appointment not found."}), 404
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
 
 @patient_bp.route('/single_appointment/<int:appointment_id>', methods=['GET'])
 def get_single_appointment_by_id(appointment_id):

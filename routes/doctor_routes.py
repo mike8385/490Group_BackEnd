@@ -416,12 +416,14 @@ def get_doctor_average_rating(doctor_id):
 def get_patients_by_doctor(doctor_id):
     cursor = mysql.connection.cursor()
     query = """
-        SELECT patient_id, doctor_id, patient_email,
-               first_name, last_name, pharmacy_id, profile_pic,
-               insurance_provider, insurance_policy_number, insurance_expiration_date,
-               acct_balance, created_at, updated_at
-        FROM PATIENT
-        WHERE doctor_id = %s
+        SELECT p.patient_id, p.doctor_id, p.patient_email, pis.mobile_number,
+               p.first_name, p.last_name, pis.medical_conditions, p.pharmacy_id, p.profile_pic,
+               pis.past_procedures, pis.blood_type, pis.health_goals, pis.activity, 
+               p.insurance_provider, p.insurance_policy_number, p.insurance_expiration_date,
+               p.acct_balance, p.created_at, p.updated_at
+        FROM PATIENT as p
+        JOIN PATIENT_INIT_SURVEY as pis ON p.patient_id = pis.patient_id
+        WHERE p.doctor_id = %s
     """
     cursor.execute(query, (doctor_id,))
     patients = cursor.fetchall()
@@ -429,7 +431,7 @@ def get_patients_by_doctor(doctor_id):
 
     result = []
     for pat in patients:
-        profile_pic = pat[6]
+        profile_pic = pat[8]
         if profile_pic:
             if isinstance(profile_pic, str):
                 profile_pic = profile_pic.encode('utf-8')
@@ -439,16 +441,22 @@ def get_patients_by_doctor(doctor_id):
             "patient_id": pat[0],
             "doctor_id": pat[1],
             "patient_email": pat[2],
-            "first_name": pat[3],
-            "last_name": pat[4],
-            "pharmacy_id": pat[5],
+            "mobile_number": pat[3],
+            "first_name": pat[4],
+            "last_name": pat[5],
+            "medical_conditions": pat[6],
+            "pharmacy_id": pat[7],
             "profile_pic": profile_pic,
-            "insurance_provider": pat[7],
-            "insurance_policy_number": pat[8],
-            "insurance_expiration_date": str(pat[9]),
-            "acct_balance": float(pat[10]),
-            "created_at": str(pat[11]),
-            "updated_at": str(pat[12])
+            "past_procedures": pat[9],
+            "blood_type": pat[10],
+            "health_goals": pat[11],
+            "activity": pat[12],
+            "insurance_provider": pat[13],
+            "insurance_policy_number": pat[14],
+            "insurance_expiration_date": str(pat[15]),
+            "acct_balance": float(pat[16]),
+            "created_at": str(pat[17]),
+            "updated_at": str(pat[18])
         })
 
     return jsonify(result), 200 if result else 404

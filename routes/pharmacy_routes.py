@@ -291,3 +291,33 @@ def get_all_medicines():
         })
 
     return jsonify(result), 200
+
+@pharmacy_bp.route('/pickup/<int:pharmacy_id>', methods=['GET'])
+def get_pickups_for_pharmacy(pharmacy_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT 
+            CONCAT(p.first_name, ' ', p.last_name) AS patient_name,
+            m.medicine_name,
+            pp.quantity
+        FROM PATIENT_PRESCRIPTION pp
+        JOIN PATIENT_APPOINTMENT pa ON pp.appt_id = pa.patient_appt_id
+        JOIN PATIENT p ON pa.patient_id = p.patient_id
+        JOIN MEDICINE m ON pp.medicine_id = m.medicine_id
+        WHERE p.pharmacy_id = %s
+            AND pp.filled = 1
+            AND pp.picked_up = 0
+    """
+    cursor.execute(query, (pharmacy_id,))
+    results = cursor.fetchall()
+
+    pickup_list = []
+    for row in results:
+        pickup_list.append({
+            "patient_name": row[0],
+            "medicine_name": row[1],
+            "quantity": row[2]
+        })
+
+    return jsonify(pickup_list), 200

@@ -120,6 +120,7 @@ def login_pharmacy():
         return jsonify({"error": "Pharmacy not found"}), 404
     
  # get medicine (already preloaded in database)   
+
 @pharmacy_bp.route('/medicine/<int:medicine_id>', methods=['GET'])
 def get_medicine(medicine_id):
     cursor = mysql.connection.cursor()
@@ -304,8 +305,6 @@ def fill_prescription():
 
     finally:
         cursor.close()
-
-
 
 @pharmacy_bp.route('/all_meds', methods=['GET'])
 def get_all_medicines():

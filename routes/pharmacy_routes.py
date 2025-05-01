@@ -249,16 +249,54 @@ def fill_prescription():
 
     cursor = mysql.connection.cursor()
 
-    query = """
-        UPDATE PATIENT_PRESCRIPTION
-        SET filled = 1
-        WHERE prescription_id = %s
-    """
-
     try:
-        cursor.execute(query, (prescription_id,))
+        cursor.execute("""
+            SELECT pp.medicine_id, pp.quantity, p.pharmacy_id
+            FROM PATIENT_PRESCRIPTION pp
+            JOIN PATIENT_APPOINTMENT pa ON pp.appt_id = pa.patient_appt_id
+            JOIN PATIENT p ON pa.patient_id = p.patient_id
+            WHERE pp.prescription_id = %s
+        """, (prescription_id,))
+        result = cursor.fetchone()
+
+        if not result:
+            return jsonify({"error": "Prescription not found."}), 404
+
+        medicine_id, quantity, pharmacy_id = result
+
+        cursor.execute("""
+            SELECT stock_count
+            FROM MEDICINE_STOCK
+            WHERE medicine_id = %s AND pharmacy_id = %s
+        """, (medicine_id, pharmacy_id))
+        stock_result = cursor.fetchone()
+
+        if not stock_result:
+            return jsonify({"error": "Medicine not found in pharmacy stock."}), 404
+
+        current_stock = stock_result[0]
+
+        if current_stock < quantity:
+            return jsonify({
+                "error": "Not enough stock to fill this prescription.",
+                "available_stock": current_stock,
+                "required_quantity": quantity
+            }), 400
+
+        cursor.execute("""
+            UPDATE PATIENT_PRESCRIPTION
+            SET filled = 1
+            WHERE prescription_id = %s
+        """, (prescription_id,))
+
+        cursor.execute("""
+            UPDATE MEDICINE_STOCK
+            SET stock_count = stock_count - %s
+            WHERE medicine_id = %s AND pharmacy_id = %s
+        """, (quantity, medicine_id, pharmacy_id))
+
         mysql.connection.commit()
-        return jsonify({"message": "Prescription marked as filled successfully."}), 200
+        return jsonify({"message": "Prescription filled and stock updated."}), 200
 
     except Exception as e:
         mysql.connection.rollback()
@@ -268,4 +306,120 @@ def fill_prescription():
         cursor.close()
 
 
-    
+
+@pharmacy_bp.route('/all_meds', methods=['GET'])
+def get_all_medicines():
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT *
+        FROM MEDICINE
+    """
+    cursor.execute(query)
+    medicines = cursor.fetchall()
+
+    result = []
+    for med in medicines:
+        result.append({
+            "medicine_id": med[0],
+            "medicine_name": med[1],
+            "medicine_price": float(med[2]),
+            #"description" : med[3],
+            #"side_effects" : med[4],
+            #"benefits" : med[5]
+        })
+
+    return jsonify(result), 200
+
+@pharmacy_bp.route('/pickup/<int:pharmacy_id>', methods=['GET'])
+def get_pickups_for_pharmacy(pharmacy_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT 
+            CONCAT(p.first_name, ' ', p.last_name) AS patient_name,
+            m.medicine_name,
+            pp.quantity
+        FROM PATIENT_PRESCRIPTION pp
+        JOIN PATIENT_APPOINTMENT pa ON pp.appt_id = pa.patient_appt_id
+        JOIN PATIENT p ON pa.patient_id = p.patient_id
+        JOIN MEDICINE m ON pp.medicine_id = m.medicine_id
+        WHERE p.pharmacy_id = %s
+            AND pp.filled = 1
+            AND pp.picked_up = 0
+    """
+    cursor.execute(query, (pharmacy_id,))
+    results = cursor.fetchall()
+
+    pickup_list = []
+    for row in results:
+        pickup_list.append({
+            "patient_name": row[0],
+            "medicine_name": row[1],
+            "quantity": row[2]
+        })
+
+    return jsonify(pickup_list), 200
+
+@pharmacy_bp.route('/all_prescriptions', methods=['GET'])
+def get_all_prescriptions():
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT *
+        FROM PATIENT_PRESCRIPTION
+    """
+    cursor.execute(query)
+    prescriptions = cursor.fetchall()
+
+    # Define the result as a list of dictionaries
+    result = []
+    for prescription in prescriptions:
+        prescription_dict = {
+            "prescription_id": prescription[0],
+            "appt_id": prescription[1],
+            "medicine_id": prescription[2],
+            "quantity": prescription[3],
+            "picked_up": prescription[4],
+            "filled": prescription[5],
+            "created_at": prescription[6],
+            "updated_at": prescription[7]
+        }
+        result.append(prescription_dict)
+
+    return jsonify(result), 200
+
+@pharmacy_bp.route('/unfilled_prescriptions/<int:pharmacy_id>', methods=['GET'])
+def get_unfilled_prescriptions(pharmacy_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT 
+            pp.prescription_id, 
+            CONCAT(d.first_name, ' ', d.last_name) AS doctor_name, 
+            CONCAT(p.first_name, ' ', p.last_name) AS patient_name,
+            m.medicine_name,
+            pp.quantity
+        FROM PATIENT_PRESCRIPTION pp
+        JOIN PATIENT_APPOINTMENT pa ON pp.appt_id = pa.patient_appt_id
+        JOIN PATIENT p ON pa.patient_id = p.patient_id
+        JOIN MEDICINE m ON pp.medicine_id = m.medicine_id
+        JOIN DOCTOR d ON pa.doctor_id = d.doctor_id
+        WHERE p.pharmacy_id = %s
+            AND pp.filled = 0  -- Only unfilled prescriptions
+    """
+    cursor.execute(query, (pharmacy_id,))
+    results = cursor.fetchall()
+
+    unfilled_prescriptions = []
+    for row in results:
+        unfilled_prescriptions.append({
+            "prescription_id": row[0],
+            "doctor_name": row[1],
+            "patient_name": row[2],
+            "medication": row[3],
+            "quantity": row[4],
+            "filled": 0  # Marking unfilled prescriptions
+        })
+
+    return jsonify(unfilled_prescriptions), 200

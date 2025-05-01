@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from rabbitmq_utils import send_medication_request
 from db import mysql
 import bcrypt, base64
 # from google.cloud import storage
@@ -460,3 +461,86 @@ def get_patients_by_doctor(doctor_id):
         })
 
     return jsonify(result), 200 if result else 404
+
+@doctor_bp.route('/doc-past/<int:doctor_id>', methods=['GET'])
+def get_past_appointments_by_doctor(doctor_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT 
+            pa.patient_appt_id,
+            pa.patient_id,
+            pa.appointment_datetime,
+            pa.reason_for_visit,
+            pa.current_medications,
+            pa.exercise_frequency,
+            pa.doctor_appointment_note,
+            pa.accepted,
+            pa.meal_prescribed,
+            pa.created_at,
+            pa.updated_at,
+            p.first_name AS patient_first_name,
+            p.last_name AS patient_last_name
+        FROM PATIENT_APPOINTMENT pa
+        JOIN PATIENT p ON pa.patient_id = p.patient_id
+        WHERE p.doctor_id = %s AND pa.appointment_datetime < NOW()
+        ORDER BY pa.appointment_datetime DESC
+    """
+
+    try:
+        cursor.execute(query, (doctor_id,))
+        appointments = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        results = [dict(zip(columns, row)) for row in appointments]
+        return jsonify(results), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@doctor_bp.route('/doc-upcoming/<int:doctor_id>', methods=['GET'])
+def get_upcoming_appointments_by_doctor(doctor_id):
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT 
+            pa.patient_appt_id,
+            pa.patient_id,
+            pa.appointment_datetime,
+            pa.reason_for_visit,
+            pa.current_medications,
+            pa.exercise_frequency,
+            pa.doctor_appointment_note,
+            pa.accepted,
+            pa.meal_prescribed,
+            pa.created_at,
+            pa.updated_at,
+            p.first_name AS patient_first_name,
+            p.last_name AS patient_last_name
+        FROM PATIENT_APPOINTMENT pa
+        JOIN PATIENT p ON pa.patient_id = p.patient_id
+        WHERE p.doctor_id = %s AND pa.appointment_datetime >= NOW()
+        ORDER BY pa.appointment_datetime ASC
+    """
+
+    try:
+        cursor.execute(query, (doctor_id,))
+        appointments = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        results = [dict(zip(columns, row)) for row in appointments]
+        return jsonify(results), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@doctor_bp.route('/request-prescription', methods=['POST'])
+def request_prescription():
+    data = request.json
+    required_fields = ['appt_id', 'medicine_id', 'quantity']
+
+    if not all(field in data for field in required_fields):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        send_medication_request(data)
+        return jsonify({'message': 'Prescription request sent successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

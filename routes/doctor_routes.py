@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from rabbitmq_utils import send_medication_request
 from db import mysql
 import bcrypt, base64
 # from google.cloud import storage
@@ -520,3 +521,18 @@ def get_upcoming_appointments_by_doctor(doctor_id):
         return jsonify(results), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+
+@doctor_bp.route('/request-prescription', methods=['POST'])
+def request_prescription():
+    data = request.json
+    required_fields = ['appt_id', 'medicine_id', 'quantity']
+
+    if not all(field in data for field in required_fields):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        send_medication_request(data)
+        return jsonify({'message': 'Prescription request sent successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

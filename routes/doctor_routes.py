@@ -701,7 +701,7 @@ def request_prescription():
 @doctor_bp.route('/edit-doctor', methods=['PUT'])
 def edit_doctor():
     data = request.get_json()
-
+    print(data)
     doctor_id = data.get('doctor_id')
     first_name = data.get('first_name')
     last_name = data.get('last_name')

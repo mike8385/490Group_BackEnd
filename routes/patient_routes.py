@@ -1997,7 +1997,6 @@ def edit_patient():
     
     patient_id = data.get('patient_id')
     patient_email = data.get('email')
-    patient_password = data.get('password')
 
     # Fields from PATIENT_INIT_SURVEY
     phone = data.get('phone')
@@ -2021,9 +2020,9 @@ def edit_patient():
         # Update PATIENT table
         cursor.execute("""
             UPDATE PATIENT
-            SET patient_email = %s, patient_password = %s
+            SET patient_email = %s
             WHERE patient_id = %s
-        """, (patient_email, patient_password, patient_id))
+        """, (patient_email, patient_id))
 
         # Update PATIENT_INIT_SURVEY table
         cursor.execute("""

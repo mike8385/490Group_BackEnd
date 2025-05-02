@@ -711,7 +711,7 @@ def edit_doctor():
     specialty = data.get('specialty')
     payment_fee = data.get('payment_fee')
     gender = data.get('gender')
-    phone_number = data.get('phone')
+    phone_number = data.get('phone_number')
     address = data.get('address')
     zipcode = data.get('zipcode')
     city = data.get('city')

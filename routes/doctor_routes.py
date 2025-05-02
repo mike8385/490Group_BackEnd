@@ -696,68 +696,7 @@ def request_prescription():
         return jsonify({'message': 'Prescription request sent successfully'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
-# edit doctor info
-@doctor_bp.route('/edit-doctor', methods=['PUT'])
-def doctor_patient():
-    data = request.get_json()
-    
-    patient_id = data.get('patient_id')
-    patient_email = data.get('email')
-    patient_password = data.get('password')
-
-    # Fields from PATIENT_INIT_SURVEY
-    phone = data.get('phone')
-    dob = data.get('dob')  
-    gender = data.get('gender')
-    height = data.get('height')
-    weight = data.get('weight')
-    blood_type = data.get('blood_type')
-    dietary_restrictions = data.get('dietary_restrictions') 
-    activity = data.get('activity') 
-    medical_conditions = data.get('health_conditions')
-    family_history = data.get('family_history')
-    past_procedures = data.get('past_procedures')
-    address = data.get('address')
-    zipcode = data.get('zipcode')
-    city = data.get('city')
-    state = data.get('state')  
-
-    cursor = mysql.connection.cursor()
-    try:
-        # Update PATIENT table
-        cursor.execute("""
-            UPDATE PATIENT
-            SET patient_email = %s, patient_password = %s
-            WHERE patient_id = %s
-        """, (patient_email, patient_password, patient_id))
-
-        # Update PATIENT_INIT_SURVEY table
-        cursor.execute("""
-            UPDATE PATIENT_INIT_SURVEY
-            SET mobile_number = %s, dob = %s, gender = %s, height = %s, weight = %s,
-                dietary_restrictions = %s, activity = %s, blood_type = %s, 
-                patient_address = %s, patient_zipcode = %s, patient_city = %s, patient_state = %s,
-                medical_conditions = %s, family_history = %s, past_procedures = %s
-            WHERE patient_id = %s
-        """, (
-            phone, dob, gender, height, weight,
-            dietary_restrictions, activity, blood_type,
-            address, zipcode, city, state,
-            medical_conditions, family_history, past_procedures,
-            patient_id
-        ))
-
-        mysql.connection.commit()
-        return jsonify({'message': 'Patient information updated successfully'}), 200
-
-    except Exception as e:
-        mysql.connection.rollback()
-        return jsonify({'error': str(e)}), 500
-
-    finally:
-        cursor.close()
-
+ 
 # edit doctor info
 @doctor_bp.route('/edit-doctor', methods=['PUT'])
 def edit_doctor():
@@ -768,7 +707,6 @@ def edit_doctor():
     last_name = data.get('last_name')
     email = data.get('email')
     description = data.get('description')
-    license_num = data.get('license_num')
     years_of_practice = data.get('years_of_practice')
     specialty = data.get('specialty')
     payment_fee = data.get('payment_fee')
@@ -787,7 +725,6 @@ def edit_doctor():
                 last_name = %s,
                 email = %s,
                 description = %s,
-                license_num = %s,
                 years_of_practice = %s,
                 specialty = %s,
                 payment_fee = %s,
@@ -800,7 +737,7 @@ def edit_doctor():
                 updated_at = NOW()
             WHERE doctor_id = %s
         """, (
-            first_name, last_name, email, description, license_num,
+            first_name, last_name, email, description,
             years_of_practice, specialty, payment_fee, gender,
             phone_number, address, zipcode, city, state, doctor_id
         ))

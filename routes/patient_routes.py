@@ -1997,15 +1997,14 @@ def edit_patient():
     
     patient_id = data.get('patient_id')
     patient_email = data.get('email')
-    patient_password = data.get('password')
 
     # Fields from PATIENT_INIT_SURVEY
-    phone = data.get('phone')
-    dob = data.get('dob')  
+    first = data.get('first_name')
+    last = data.get('last_name')
+    phone = data.get('phone') 
     gender = data.get('gender')
     height = data.get('height')
     weight = data.get('weight')
-    blood_type = data.get('blood_type')
     dietary_restrictions = data.get('dietary_restrictions') 
     activity = data.get('activity') 
     medical_conditions = data.get('health_conditions')
@@ -2021,21 +2020,21 @@ def edit_patient():
         # Update PATIENT table
         cursor.execute("""
             UPDATE PATIENT
-            SET patient_email = %s, patient_password = %s
+            SET patient_email = %s, first_name = %s, last_name = %s
             WHERE patient_id = %s
-        """, (patient_email, patient_password, patient_id))
+        """, (patient_email, first, last, patient_id))
 
         # Update PATIENT_INIT_SURVEY table
         cursor.execute("""
             UPDATE PATIENT_INIT_SURVEY
-            SET mobile_number = %s, dob = %s, gender = %s, height = %s, weight = %s,
-                dietary_restrictions = %s, activity = %s, blood_type = %s, 
+            SET mobile_number = %s, gender = %s, height = %s, weight = %s,
+                dietary_restrictions = %s, activity = %s, 
                 patient_address = %s, patient_zipcode = %s, patient_city = %s, patient_state = %s,
                 medical_conditions = %s, family_history = %s, past_procedures = %s
             WHERE patient_id = %s
         """, (
-            phone, dob, gender, height, weight,
-            dietary_restrictions, activity, blood_type,
+            phone, gender, height, weight,
+            dietary_restrictions, activity,
             address, zipcode, city, state,
             medical_conditions, family_history, past_procedures,
             patient_id

@@ -769,7 +769,6 @@ def edit_doctor():
     email = data.get('email')
     description = data.get('description')
     license_num = data.get('license_num')
-    dob = data.get('dob')
     years_of_practice = data.get('years_of_practice')
     specialty = data.get('specialty')
     payment_fee = data.get('payment_fee')

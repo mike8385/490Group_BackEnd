@@ -1425,7 +1425,33 @@ def cancel_appointment(appointment_id):
     except Exception as e:
         mysql.connection.rollback()
         return jsonify({"error": str(e)}), 400
-
+    
+@patient_bp.route('/appointment/status/<int:appt_id>', methods=['GET'])
+def get_appointment_status(appt_id):
+    cursor = mysql.connection.cursor()
+ 
+    try:
+         # Query to get the rating for the specific appointment
+         cursor.execute("""
+             SELECT appt_rating
+             FROM PATIENT_APPOINTMENT
+             WHERE patient_appt_id = %s
+         """, (appt_id,))
+         result = cursor.fetchone()
+ 
+         if result:
+             # If appointment is found, return the rating
+             appt_rating = result[0]
+             return jsonify({
+                 "appt_rating": appt_rating
+             }), 200
+         else:
+             return jsonify({"error": "Appointment not found."}), 404
+ 
+    except Exception as e:
+         return jsonify({"error": str(e)}), 500
+    finally:
+         cursor.close()
 #-------------------------BILL ENDPOINTS ------------------------------------------------
 # add a patient's bill - tested 
 @patient_bp.route('/patient/bill', methods=['POST'])

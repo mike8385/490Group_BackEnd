@@ -314,19 +314,16 @@ def get_appointments_by_doctor(doctor_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
     
-# doctor accepts an appointment [1], else default 0
 @doctor_bp.route('/doc-appointments-status/<int:appointment_id>', methods=['PATCH'])
 def update_appointment_status(appointment_id):
     """
-    Returns if doctor is accepting an appointment and changes the status.
+    Updates the appointment status: accepts (1) or deletes (if denied = 0).
     ---
     responses:
       200:
-        description: Appointment status updated successfully
+        description: Appointment status updated or deleted successfully
       400:
         description: Error message based on what went wrong.
-      400: 
-        description: Invalid status. 'accepted' must be 0 (deny) or 1 (accept).
     """
     data = request.get_json()
     new_status = data.get('accepted')
@@ -336,19 +333,31 @@ def update_appointment_status(appointment_id):
 
     cursor = mysql.connection.cursor()
 
-    query = """
-        UPDATE PATIENT_APPOINTMENT
-        SET accepted = %s, updated_at = CURRENT_TIMESTAMP
-        WHERE patient_appt_id = %s
-    """
-
     try:
-        cursor.execute(query, (new_status, appointment_id))
+        if new_status == 1:
+            # Accept: update status to 1
+            query = """
+                UPDATE PATIENT_APPOINTMENT
+                SET accepted = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE patient_appt_id = %s
+            """
+            cursor.execute(query, (new_status, appointment_id))
+            message = "Appointment accepted successfully."
+        else:
+            # Deny: delete the appointment
+            query = "DELETE FROM PATIENT_APPOINTMENT WHERE patient_appt_id = %s"
+            cursor.execute(query, (appointment_id,))
+            message = "Appointment denied and deleted successfully."
+
         mysql.connection.commit()
-        return jsonify({"message": "Appointment status updated successfully."}), 200
+        return jsonify({"message": message}), 200
+
     except Exception as e:
         mysql.connection.rollback()
         return jsonify({"error": str(e)}), 400
+
+    finally:
+        cursor.close()
 
 # doctor adds a prescription for a patient
 @doctor_bp.route('/prescription/add', methods=['POST'])
@@ -658,7 +667,7 @@ def get_upcoming_appointments_by_doctor(doctor_id):
             p.last_name AS patient_last_name
         FROM PATIENT_APPOINTMENT pa
         JOIN PATIENT p ON pa.patient_id = p.patient_id
-        WHERE p.doctor_id = %s AND pa.appointment_datetime >= NOW()
+        WHERE p.doctor_id = %s AND pa.appointment_datetime >= NOW() AND pa.accepted = 1
         ORDER BY pa.appointment_datetime ASC
     """
 
@@ -671,6 +680,52 @@ def get_upcoming_appointments_by_doctor(doctor_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+@doctor_bp.route('/requested-appointments/<int:doctor_id>', methods=['GET'])
+def get_requested_appointments(doctor_id):
+    """
+    Get upcoming requested (not yet accepted) appointments by doctor ID
+    ---
+    responses:
+      200:
+        description: Returns upcoming appointments that have not been accepted yet for the specified doctor.
+      400:
+        description: Error message based on what went wrong.
+    """
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT 
+            pa.patient_appt_id,
+            pa.patient_id,
+            pa.appointment_datetime,
+            pa.reason_for_visit,
+            pa.current_medications,
+            pa.exercise_frequency,
+            pa.doctor_appointment_note,
+            pa.accepted,
+            pa.meal_prescribed,
+            pa.created_at,
+            pa.updated_at,
+            p.first_name AS patient_first_name,
+            p.last_name AS patient_last_name
+        FROM PATIENT_APPOINTMENT pa
+        JOIN PATIENT p ON pa.patient_id = p.patient_id
+        WHERE p.doctor_id = %s
+          AND pa.appointment_datetime >= NOW()
+          AND (pa.accepted = 0 OR pa.accepted IS NULL)
+        ORDER BY pa.appointment_datetime ASC
+    """
+
+    try:
+        cursor.execute(query, (doctor_id,))
+        appointments = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        results = [dict(zip(columns, row)) for row in appointments]
+        return jsonify(results), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()
 
 @doctor_bp.route('/request-prescription', methods=['POST'])
 def request_prescription():

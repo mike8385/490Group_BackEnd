@@ -410,7 +410,9 @@ def get_patient_init_survey(patient_id):
             pis.past_procedures,
             p.patient_email,
             p.first_name,
-            p.last_name
+            p.last_name,
+            pis.favorite_meal,
+            pis.health_goals
         FROM PATIENT as p
         JOIN PATIENT_INIT_SURVEY as pis ON p.patient_id = pis.patient_id
         WHERE p.patient_id = %s
@@ -425,7 +427,7 @@ def get_patient_init_survey(patient_id):
                 'is_id', 'patient_id', 'mobile_number', 'dob', 'gender',
                 'height', 'weight', 'dietary_restrictions', 'blood_type', 'patient_address',
                 'patient_zipcode', 'patient_city', 'patient_state', 'medical_conditions',
-                'family_history', 'past_procedures', 'patient_email', 'first_name', 'last_name'
+                'family_history', 'past_procedures', 'patient_email', 'first_name', 'last_name', 'favorite_meal', 'health_goals'
             ]
             survey_info = dict(zip(keys, result))
             return jsonify(survey_info), 200

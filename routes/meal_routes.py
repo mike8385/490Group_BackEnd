@@ -88,7 +88,8 @@ def get_all_meals():
         } for meal in meals
     ]), 200
 
-# creates meal plan
+# creates meal plan 
+# [x] needs meal plan title made by field, no description necessary
 @meal_bp.route('/create-meal-plan', methods=['POST'])
 def create_meal_plan():
     """
@@ -103,15 +104,20 @@ def create_meal_plan():
         application/json:
           schema:
             type: object
-            required: [meal_plan_name]
+            required: [meal_plan_name, meal_plan_title]
             properties:
               meal_plan_name:
                 type: string
-              description:
+              meal_plan_title:
                 type: string
+              doctor_id:
+                type: integer
+              patient_id:
+                type: integer
           example:
             meal_plan_name: "Vegan"
-            description: "Plant-based high-fiber meals"
+            meal_plan_title: "Plant-based high-fiber meals"
+            doctor_id: 3
     responses:
       201:
         description: Meal plan created successfully
@@ -120,23 +126,100 @@ def create_meal_plan():
     """
     data = request.get_json()
     meal_plan_name = data.get('meal_plan_name')
-    description = data.get('description')
+    meal_plan_title = data.get('meal_plan_title')
+    doctor_id = data.get('doctor_id')
+    patient_id = data.get('patient_id')
 
     cursor = mysql.connection.cursor()
     try:
+        if doctor_id:
+            cursor.execute("SELECT user_id FROM USER WHERE doctor_id = %s", (doctor_id,))
+        elif patient_id:
+            cursor.execute("SELECT user_id FROM USER WHERE patient_id = %s", (patient_id,))
+        else:
+            return jsonify({'error': 'Either doctor_id or patient_id is required'}), 400
+
+        result = cursor.fetchone()
+        if not result:
+            return jsonify({'error': 'User not found'}), 400
+
+        user_id = result[0]
+
         cursor.execute(
-            "INSERT INTO MEAL_PLAN (meal_plan_name, description) VALUES (%s, %s)",
-            (meal_plan_name, description)
+            "INSERT INTO MEAL_PLAN (meal_plan_name, meal_plan_title, made_by) VALUES (%s, %s, %s)",
+            (meal_plan_name, meal_plan_title, user_id)
         )
         mysql.connection.commit()
         return jsonify({'message': 'Meal plan created successfully'}), 201
+
     except Exception as e:
         mysql.connection.rollback()
         return jsonify({'error': str(e)}), 400
     finally:
         cursor.close()
 
+# [x] get method for create-meal plan 
+@meal_bp.route('/get-meal-plans-by-user', methods=['GET'])
+def get_meal_plans_by_user():
+    """
+    Get meal plans created by a specific doctor or patient
+    """
+    doctor_id = request.args.get('doctor_id', type=int)
+    patient_id = request.args.get('patient_id', type=int)
+
+    if not doctor_id and not patient_id:
+        return jsonify({'error': 'doctor_id or patient_id must be provided'}), 400
+
+    cursor = mysql.connection.cursor()
+    try:
+        if doctor_id:
+            cursor.execute("SELECT user_id FROM USER WHERE doctor_id = %s", (doctor_id,))
+        else:
+            cursor.execute("SELECT user_id FROM USER WHERE patient_id = %s", (patient_id,))
+
+        user = cursor.fetchone()
+        if not user:
+            return jsonify({'error': 'User not found'}), 400
+
+        user_id = user[0]
+
+        query = """
+        SELECT
+            mp.meal_plan_id,
+            mp.meal_plan_name,
+            mp.meal_plan_title,
+            IF(d.first_name IS NOT NULL, d.first_name, p.first_name) AS first_name,
+            IF(d.last_name IS NOT NULL, d.last_name, p.last_name) AS last_name
+        FROM MEAL_PLAN mp
+        JOIN USER u ON mp.made_by = u.user_id
+        LEFT JOIN DOCTOR d ON u.doctor_id = d.doctor_id
+        LEFT JOIN PATIENT p ON u.patient_id = p.patient_id
+        WHERE mp.made_by = %s
+        ORDER BY mp.created_at DESC;
+        """
+        cursor.execute(query, (user_id,))
+        results = cursor.fetchall()
+
+        meal_plans = []
+        for row in results:
+            meal_plan_id, meal_plan_name, meal_plan_title, first_name, last_name = row
+            meal_plans.append({
+                'meal_plan_id': meal_plan_id,
+                'meal_plan_name': meal_plan_name,
+                'meal_plan_title': meal_plan_title,
+                'first_name': first_name,
+                'last_name': last_name
+            })
+
+        return jsonify(meal_plans), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+
 # prescribes meal to meal plan entry 
+# [x] get rid of meal time column
 @meal_bp.route('/assign-meal', methods=['POST'])
 def assign_meal_to_plan_entry():
     """
@@ -160,14 +243,10 @@ def assign_meal_to_plan_entry():
               day_of_week:
                 type: string
                 enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
-              meal_time:
-                type: string
-                enum: [Breakfast, Lunch, Dinner]
           example:
             meal_plan_id: 2
             meal_id: 4
             day_of_week: "Tuesday"
-            meal_time: "Lunch"
     responses:
       200:
         description: Meal assigned successfully
@@ -178,15 +257,14 @@ def assign_meal_to_plan_entry():
     meal_plan_id = data.get('meal_plan_id')
     meal_id = data.get('meal_id')
     day_of_week = data.get('day_of_week')
-    meal_time = data.get('meal_time')
 
     cursor = mysql.connection.cursor()
     try:
         cursor.execute("""
-            INSERT INTO MEAL_PLAN_ENTRY (meal_plan_id, meal_id, day_of_week, meal_time)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO MEAL_PLAN_ENTRY (meal_plan_id, meal_id, day_of_week)
+            VALUES (%s, %s, %s)
             ON DUPLICATE KEY UPDATE meal_id = VALUES(meal_id)
-        """, (meal_plan_id, meal_id, day_of_week, meal_time))
+        """, (meal_plan_id, meal_id, day_of_week))
         mysql.connection.commit()
         return jsonify({'message': 'Meal assigned successfully'}), 200
     except Exception as e:
@@ -255,7 +333,7 @@ def get_meal_plan_entries_by_day_and_time():
         } for entry in entries
     ]), 200
 
-# get meal plans by prescribed type of meal
+# get meal plans by prescribed type of meal - unnecessary
 @meal_bp.route('/meal-plans/by-name', methods=['GET'])
 def get_meal_plans_by_name():
     """
@@ -302,3 +380,13 @@ def get_meal_plans_by_name():
             'description': plan[2]
         } for plan in plans
     ]), 200
+
+# [] add a meal to saved meal plans for specific patient/doctor id
+@meal_bp.route('/saved-meal-plans', methods=['POST'])
+def save_a_meal():
+    return jsonify()
+
+# [] get saved meal plan for specific patient/doctor id
+@meal_bp.route('/saved-meal-plans', methods=['GET'])
+def get_saved_meal(user_id):
+  return jsonify()

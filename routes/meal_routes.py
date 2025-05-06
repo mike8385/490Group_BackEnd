@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from db import mysql
+from MySQLdb.cursors import DictCursor
 import bcrypt, base64
 
 meal_bp = Blueprint('meal_bp', __name__)
@@ -383,10 +384,75 @@ def get_meal_plans_by_name():
 
 # [] add a meal to saved meal plans for specific patient/doctor id
 @meal_bp.route('/saved-meal-plans', methods=['POST'])
-def save_a_meal():
+def save_a_meal_plan():
     return jsonify()
 
 # [] get saved meal plan for specific patient/doctor id
-@meal_bp.route('/saved-meal-plans', methods=['GET'])
-def get_saved_meal(user_id):
-  return jsonify()
+@meal_bp.route('/saved-meal-plans/<int:user_id>', methods=['GET'])
+def get_saved_meal_plan(user_id):
+    """
+    Get meal plans saved by a specific user, including meals in each plan.
+    """
+    cursor = mysql.connection.cursor(DictCursor)
+    try:
+        # Step 1: Validate user exists
+        cursor.execute("SELECT * FROM USER WHERE user_id = %s", (user_id,))
+        user = cursor.fetchone()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        # Step 2: Fetch saved meal plans with meals
+        query = """
+            SELECT 
+                pp.patient_plan_id,
+                mp.meal_plan_id,
+                mp.meal_plan_title,
+                mp.meal_plan_name AS tag,
+                m.meal_id,
+                m.meal_name,
+                m.meal_description,
+                m.meal_calories,
+                mpe.day_of_week,
+                mpe.meal_time
+            FROM PATIENT_PLANS pp
+            JOIN MEAL_PLAN mp ON pp.meal_plan_id = mp.meal_plan_id
+            JOIN MEAL_PLAN_ENTRY mpe ON mp.meal_plan_id = mpe.meal_plan_id
+            JOIN MEAL m ON mpe.meal_id = m.meal_id
+            WHERE pp.user_id = %s
+            ORDER BY mp.meal_plan_id, mpe.day_of_week, mpe.meal_time
+        """
+        cursor.execute(query, (user_id,))
+        rows = cursor.fetchall()
+        cursor.close()
+
+        if not rows:
+            return jsonify({'message': 'No saved meal plans found for this user.'}), 200
+
+        # Step 3: Group by meal plan
+        from collections import defaultdict
+        meal_plans = defaultdict(lambda: {
+            'meal_plan_id': None,
+            'title': '',
+            'tag': '',
+            'meals': []
+        })
+
+        for row in rows:
+            pid = row['meal_plan_id']
+            meal_plans[pid]['meal_plan_id'] = pid
+            meal_plans[pid]['title'] = row['meal_plan_title']
+            meal_plans[pid]['tag'] = row['tag']
+            meal_plans[pid]['meals'].append({
+                'meal_id': row['meal_id'],
+                'name': row['meal_name'],
+                'description': row['meal_description'],
+                'calories': row['meal_calories'],
+                'day': row['day_of_week'],
+                'time': row['meal_time']
+            })
+
+        return jsonify({'saved_meal_plans': list(meal_plans.values())}), 200
+
+    except Exception as e:
+        print("Error retrieving saved meal plans:", str(e))
+        return jsonify({'error': 'Internal server error'}), 50

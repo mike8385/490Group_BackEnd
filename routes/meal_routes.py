@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from db import mysql
 from MySQLdb.cursors import DictCursor
+from collections import defaultdict
 import bcrypt, base64
 
 meal_bp = Blueprint('meal_bp', __name__)
@@ -390,24 +391,27 @@ def save_a_meal_plan():
 # [] get saved meal plan for specific patient/doctor id
 @meal_bp.route('/saved-meal-plans/<int:user_id>', methods=['GET'])
 def get_saved_meal_plan(user_id):
-    """
-    Get meal plans saved by a specific user, including meals in each plan.
-    """
     cursor = mysql.connection.cursor(DictCursor)
     try:
-        # Step 1: Validate user exists
+        # Step 1: Confirm user exists
         cursor.execute("SELECT * FROM USER WHERE user_id = %s", (user_id,))
-        user = cursor.fetchone()
-        if not user:
+        if not cursor.fetchone():
             return jsonify({'error': 'User not found'}), 404
 
-        # Step 2: Fetch saved meal plans with meals
+        # Step 2: Query meal plans and creator info
         query = """
             SELECT 
                 pp.patient_plan_id,
                 mp.meal_plan_id,
                 mp.meal_plan_title,
                 mp.meal_plan_name AS tag,
+                mp.made_by,
+                u.doctor_id,
+                u.patient_id,
+                d.first_name AS doctor_first,
+                d.last_name AS doctor_last,
+                p.first_name AS patient_first,
+                p.last_name AS patient_last,
                 m.meal_id,
                 m.meal_name,
                 m.meal_description,
@@ -416,6 +420,9 @@ def get_saved_meal_plan(user_id):
                 mpe.meal_time
             FROM PATIENT_PLANS pp
             JOIN MEAL_PLAN mp ON pp.meal_plan_id = mp.meal_plan_id
+            JOIN USER u ON mp.made_by = u.user_id
+            LEFT JOIN DOCTOR d ON u.doctor_id = d.doctor_id
+            LEFT JOIN PATIENT p ON u.patient_id = p.patient_id
             JOIN MEAL_PLAN_ENTRY mpe ON mp.meal_plan_id = mpe.meal_plan_id
             JOIN MEAL m ON mpe.meal_id = m.meal_id
             WHERE pp.user_id = %s
@@ -429,19 +436,29 @@ def get_saved_meal_plan(user_id):
             return jsonify({'message': 'No saved meal plans found for this user.'}), 200
 
         # Step 3: Group by meal plan
-        from collections import defaultdict
         meal_plans = defaultdict(lambda: {
             'meal_plan_id': None,
             'title': '',
             'tag': '',
+            'made_by': None,
+            'creator_name': '',
             'meals': []
         })
 
         for row in rows:
             pid = row['meal_plan_id']
+
+            # Determine full name
+            if row['doctor_first']:
+                creator_name = f"Dr. {row['doctor_first']} {row['doctor_last']}"
+            else:
+                creator_name = f"{row['patient_first']} {row['patient_last']}"
+
             meal_plans[pid]['meal_plan_id'] = pid
             meal_plans[pid]['title'] = row['meal_plan_title']
             meal_plans[pid]['tag'] = row['tag']
+            meal_plans[pid]['made_by'] = row['made_by']
+            meal_plans[pid]['creator_name'] = creator_name
             meal_plans[pid]['meals'].append({
                 'meal_id': row['meal_id'],
                 'name': row['meal_name'],
@@ -455,4 +472,4 @@ def get_saved_meal_plan(user_id):
 
     except Exception as e:
         print("Error retrieving saved meal plans:", str(e))
-        return jsonify({'error': 'Internal server error'}), 50
+        return jsonify({'error': 'Internal server error'}), 500

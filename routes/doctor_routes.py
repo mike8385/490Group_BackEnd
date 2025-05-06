@@ -755,6 +755,17 @@ def request_prescription():
 # edit doctor info
 @doctor_bp.route('/edit-doctor', methods=['PUT'])
 def edit_doctor():
+    """
+    Can edit doctor information.
+    ---
+    responses:
+      200:
+        description: Doctor information updated successfully.
+      400:
+        description: Missing required fields
+      500:
+        description: Error message based on what went wrong.
+    """
     data = request.get_json()
     print(data)
     doctor_id = data.get('doctor_id')
@@ -806,3 +817,44 @@ def edit_doctor():
 
     finally:
         cursor.close()
+
+# retrieve top 3 rated doctors
+@doctor_bp.route('/top-doctors', methods=['GET'])
+def get_top_doctors():
+    """
+    Get the top 3 rated doctors
+
+    ---
+    tags:
+      - Doctor
+    responses:
+      200:
+        description: Successfully retrieved top 3 doctors.
+      400:
+        description: Error occurred.
+      404:
+        description: Ratings not found.
+    """
+    cursor = mysql.connection.cursor()
+
+    query = """
+    SELECT first_name, last_Name, description, doctor_rating, doctor_picture FROM DOCTOR
+    ORDER BY doctor_rating DESC
+    LIMIT 3;
+    """
+
+    try:
+        cursor.execute(query)
+        results = cursor.fetchall()
+        if results:
+            details = [{"first_name": result[0], "last_name": result[1], "description": result[2],
+                        "doctor_rating": result[3], "doctor_picture": result[4]} for result in results]
+            return jsonify(details), 200
+        else:
+            return jsonify({"error": "Ratings not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+
+

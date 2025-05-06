@@ -5,6 +5,53 @@ import bcrypt, base64
 comm_bp = Blueprint('comm_bp', __name__)
 
 # get community post
+@comm_bp.route('/posts', methods=['GET'])
+def get_all_posts():
+    """
+    Retrieve all community posts
+
+    """
+    cursor = mysql.connection.cursor()
+    query = """
+        SELECT CP.post_id, CP.meal_id, CP.user_id, CP.description, CP.picture, CP.created_at,
+          M.meal_name, M.meal_calories,
+          COALESCE(P.first_name, D.first_name) AS first_name,
+          COALESCE(P.last_name, D.last_name) AS last_name,
+          MP.meal_plan_name
+        FROM COMMUNITY_POST AS CP
+        JOIN MEAL AS M ON CP.meal_id = M.meal_id
+        JOIN USER AS U ON CP.user_id = U.user_id
+        LEFT JOIN PATIENT AS P ON U.patient_id = P.patient_id
+        LEFT JOIN DOCTOR AS D ON U.doctor_id = D.doctor_id
+        LEFT JOIN MEAL_PLAN_ENTRY AS MPE ON CP.meal_id = MPE.meal_id
+        LEFT JOIN MEAL_PLAN AS MP ON MPE.meal_plan_id = MP.meal_plan_id
+        ORDER BY CP.post_id DESC;
+    """
+    cursor.execute(query)
+    posts = cursor.fetchall()
+
+    result = []
+    for post in posts:
+        post_picture = post[4]
+        if post_picture:
+            if isinstance(post_picture, str):
+                post_picture = post_picture.encode('utf-8')
+            post_picture = base64.b64encode(post_picture).decode('utf-8')
+
+        result.append({
+            "post_id": post[0],
+            "meal_id": post[1],
+            "user_id": post[2],
+            "description": post[3],
+            "picture": post_picture,
+            "created_at": post[5],
+            "meal_name": post[6],
+            "meal_calories": post[7],
+            "first_name": post[8],
+            "last_name": post[9],
+            "tag": post[10], # meal plan name, but we're using this as a tag
+        })
+    return jsonify(result), 200
 
 # add community post
 

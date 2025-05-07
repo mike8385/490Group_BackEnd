@@ -1,4 +1,4 @@
-MYSQL_HOST = '34.148.167.204' 
+MYSQL_HOST = 'localhost' # oracle public ip
 MYSQL_USER = 'root'
-MYSQL_PASSWORD = 'root'
+MYSQL_PASSWORD = 'Noforget04'
 MYSQL_DB = 'clinic_db'

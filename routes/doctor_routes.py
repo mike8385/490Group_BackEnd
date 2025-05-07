@@ -49,8 +49,8 @@ def register_doctor():
         INSERT INTO DOCTOR (
             first_name, last_name, email, password, description, license_num,
             license_exp_date, dob, med_school, years_of_practice, specialty, payment_fee,
-            gender, phone_number, address, zipcode, city, state, doctor_rating, doctor_picture
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            gender, phone_number, address, zipcode, city, state, doctor_picture
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
 
     values = (
@@ -72,7 +72,6 @@ def register_doctor():
         data['zipcode'],
         data['city'],
         data['state'],
-        data['doctor_rating'],
         data.get('doctor_picture')
         # doctor_picture_url  # saving url instead of binary data
     )
@@ -231,7 +230,7 @@ def get_all_doctors():
         SELECT doctor_id, first_name, last_name, email, description, license_num,
                license_exp_date, dob, med_school, specialty, years_of_practice, payment_fee,
                gender, phone_number, address, zipcode, city, state, doctor_picture, password,
-               accepting_patients, created_at, updated_at
+               accepting_patients, doctor_ratings, created_at, updated_at
         FROM DOCTOR
     """
     cursor.execute(query)
@@ -266,7 +265,8 @@ def get_all_doctors():
             "state": doc[17],
             "password": doc[18],
             "doctor_picture": doctor_picture,
-            "accepting_patients" : doc[20]
+            "accepting_patients" : doc[20],
+            "doctor_ratings": doc[21]
         })
 
     return jsonify(result), 200

@@ -77,6 +77,15 @@ def register_doctor():
     )
     try:
         cursor.execute(query, values)
+        # doctor_id = cursor.lastrowid
+        # print("Inserted doctor_id:", doctor_id)
+
+        # # Insert into USER table with this doctor_id
+        # insert_user_query = """
+        #     INSERT INTO USER (patient_id, doctor_id)
+        #     VALUES (NULL, %s)
+        # """
+        # cursor.execute(insert_user_query, (doctor_id,))
         mysql.connection.commit()
         return jsonify({"message": "Doctor registered successfully!"}), 201
     except Exception as e:

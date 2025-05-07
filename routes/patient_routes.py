@@ -5,7 +5,7 @@ import bcrypt
 patient_bp = Blueprint('patient_bp', __name__)
 
 #--------------------REGISTRATION END POINTS------------------------------ 
-# register patient + init survey combined
+# register patient + init survey combined + new user
 @patient_bp.route('/register-patient-with-survey', methods=['POST'])
 def register_patient_with_survey():
     """
@@ -182,6 +182,7 @@ def register_patient_with_survey():
 
     except Exception as e:
         mysql.connection.rollback()
+        print("Exception during registration:", str(e))
         return jsonify({"error": str(e)}), 400
 
 @patient_bp.route('/patient/<int:patient_id>', methods=['GET'])

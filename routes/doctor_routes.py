@@ -854,6 +854,8 @@ def get_top_doctors():
             return jsonify({"error": "Ratings not found"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()
 
 
 

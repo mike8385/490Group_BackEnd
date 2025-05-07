@@ -2092,3 +2092,43 @@ def get_patient_email(patient_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+    
+@patient_bp.route('/appointmentspastpd/<int:patient_id>/<int:doctor_id>', methods=['GET'])
+def get_past_appointments_with_doctor(patient_id, doctor_id):
+    """
+    Get past appointments for a patient with a specific doctor
+
+    ---
+    tags:
+      - Appointment
+    parameters:
+      - name: patient_id
+        in: path
+        type: integer
+        required: true
+      - name: doctor_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: List of past appointments with specified doctor
+      400:
+        description: Retrieval failed
+    """
+    cursor = mysql.connection.cursor()
+
+    query = """
+        SELECT * FROM PATIENT_APPOINTMENT
+        WHERE patient_id = %s AND doctor_id = %s AND appointment_datetime < NOW()
+        ORDER BY appointment_datetime DESC
+    """
+
+    try:
+        cursor.execute(query, (patient_id, doctor_id))
+        appointments = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        results = [dict(zip(columns, row)) for row in appointments]
+        return jsonify(results), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400

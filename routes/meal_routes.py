@@ -386,9 +386,72 @@ def get_meal_plans_by_name():
 # [] add a meal to saved meal plans for specific patient/doctor id
 @meal_bp.route('/saved-meal-plans', methods=['POST'])
 def save_a_meal_plan():
-    return jsonify()
+    """
+    Assign a meal to a specific day and time in a meal plan
 
-# [] get saved meal plan for specific patient/doctor id
+    ---
+    tags:
+      - Meal Plan
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [meal_plan_id]
+            properties:
+              meal_plan_id:
+                type: integer
+              doctor_id:
+                type: integer
+              patient_id:
+                type: integer
+          example:
+            meal_plan_id: 2
+            patient_id: 4
+    responses:
+      201:
+        description: Meal saved successfully
+      400:
+        description: Error
+      404:
+        description: User not found
+    """
+    data = request.get_json()
+    meal_plan_id = data.get('meal_plan_id')
+    doctor_id = data.get('doctor_id')
+    patient_id = data.get('patient_id')
+
+    cursor = mysql.connection.cursor()
+    try:
+        if doctor_id:
+            cursor.execute("SELECT user_id FROM USER WHERE doctor_id = %s", (doctor_id,))
+        elif patient_id:
+            cursor.execute("SELECT user_id FROM USER WHERE patient_id = %s", (patient_id,))
+        else:
+            return jsonify({'error': 'Either doctor_id or patient_id is required'}), 400
+
+        result = cursor.fetchone()
+        if not result:
+            return jsonify({'error': 'User not found'}), 400
+
+        user_id = result[0]
+
+        query = """
+        INSERT INTO PATIENT_PLANS (meal_plan_id, user_id) VALUES (%s, %s)
+        """
+        cursor.execute(query, (meal_plan_id, user_id))
+        mysql.connection.commit()
+        return jsonify({'message': 'Meal saved successfully'})
+
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({'error': str(e)}), 400
+    
+    finally:
+        cursor.close()
+
+# [x] get saved meal plan for specific patient/doctor id
 @meal_bp.route('/saved-meal-plans/<int:user_id>', methods=['GET'])
 def get_saved_meal_plan(user_id):
     cursor = mysql.connection.cursor(DictCursor)

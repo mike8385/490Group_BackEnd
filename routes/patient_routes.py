@@ -1171,9 +1171,19 @@ def get_upcoming_appointments(patient_id):
     cursor = mysql.connection.cursor()
 
     query = """
-        SELECT * FROM PATIENT_APPOINTMENT
-        WHERE patient_id = %s AND appointment_datetime >= NOW()
-        ORDER BY appointment_datetime ASC
+        SELECT 
+            PA.*, 
+            CONCAT('Dr. ', D.first_name, ' ', D.last_name) AS doctor_name
+        FROM 
+            PATIENT_APPOINTMENT PA
+        JOIN 
+            doctor D ON PA.doctor_id = D.doctor_id
+        WHERE 
+            PA.patient_id = %s 
+            AND PA.appointment_datetime >= NOW()
+        ORDER BY 
+            PA.appointment_datetime ASC;
+
     """
 
     try:
@@ -1207,9 +1217,19 @@ def get_past_appointments(patient_id):
     cursor = mysql.connection.cursor()
 
     query = """
-        SELECT * FROM PATIENT_APPOINTMENT
-        WHERE patient_id = %s AND appointment_datetime < NOW()
-        ORDER BY appointment_datetime DESC
+        SELECT 
+            PA.*, 
+            CONCAT('Dr. ', D.first_name, ' ', D.last_name) AS doctor_name
+        FROM 
+            PATIENT_APPOINTMENT PA
+        JOIN 
+            doctor D ON PA.doctor_id = D.doctor_id
+        WHERE 
+            PA.patient_id = %s 
+            AND PA.appointment_datetime < NOW()
+        ORDER BY 
+            PA.appointment_datetime DESC;
+
     """
 
     try:

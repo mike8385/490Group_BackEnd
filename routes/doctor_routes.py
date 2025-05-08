@@ -330,11 +330,11 @@ def get_appointments_by_doctor(doctor_id):
 @doctor_bp.route('/doc-appointments-status/<int:appointment_id>', methods=['PATCH'])
 def update_appointment_status(appointment_id):
     """
-    Updates the appointment status: accepts (1) or deletes (if denied = 0).
+    Updates the appointment status: accepts (1) or sets to 2 if denied.
     ---
     responses:
       200:
-        description: Appointment status updated or deleted successfully
+        description: Appointment status updated successfully
       400:
         description: Error message based on what went wrong.
     """
@@ -357,10 +357,14 @@ def update_appointment_status(appointment_id):
             cursor.execute(query, (new_status, appointment_id))
             message = "Appointment accepted successfully."
         else:
-            # Deny: delete the appointment
-            query = "DELETE FROM PATIENT_APPOINTMENT WHERE patient_appt_id = %s"
+            # Deny: update status to 0.5 instead of deleting
+            query = """
+                UPDATE PATIENT_APPOINTMENT
+                SET accepted = 2, updated_at = CURRENT_TIMESTAMP
+                WHERE patient_appt_id = %s
+            """
             cursor.execute(query, (appointment_id,))
-            message = "Appointment denied and deleted successfully."
+            message = "Appointment denied (status set to 0.5) successfully."
 
         mysql.connection.commit()
         return jsonify({"message": message}), 200
@@ -371,6 +375,7 @@ def update_appointment_status(appointment_id):
 
     finally:
         cursor.close()
+
 
 # doctor adds a prescription for a patient
 @doctor_bp.route('/prescription/add', methods=['POST'])

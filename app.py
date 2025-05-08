@@ -5,6 +5,7 @@ from flasgger import Swagger
 from flask_socketio import SocketIO, emit
 import config
 from datetime import datetime
+import pytz
 
 # Blueprints
 from routes.doctor_routes import doctor_bp
@@ -43,7 +44,11 @@ app.register_blueprint(chat_bp)
 def handle_send_message(data):
     print("Message received:", data)
     if 'timestamp' not in data:
-        data['timestamp'] = datetime.utcnow().isoformat()
+        utc_now = datetime.utcnow()  # Current time in UTC
+        eastern = pytz.timezone('US/Eastern')  # Eastern Time Zone
+        utc_now = pytz.utc.localize(utc_now)  # Localize the UTC time
+        eastern_time = utc_now.astimezone(eastern)  # Convert to Eastern Time Zone
+        data['timestamp'] = eastern_time.isoformat()  # Store it as ISO format
     emit('receive_message', data, broadcast=True)
 
 if __name__ == "__main__":

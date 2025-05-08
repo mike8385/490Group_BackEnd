@@ -1,4 +1,6 @@
-MYSQL_HOST = '127.0.0.1' 
-MYSQL_USER = 'root'
-MYSQL_PASSWORD = 'root'
-MYSQL_DB = 'clinic_db'
+import os
+
+MYSQL_HOST = os.environ.get('MYSQL_HOST')
+MYSQL_USER = os.environ.get('MYSQL_USER')
+MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD')
+MYSQL_DB = os.environ.get('MYSQL_DB')

@@ -6,6 +6,10 @@ from flask_socketio import SocketIO, emit
 import config
 from datetime import datetime
 import pytz
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 
 # Blueprints
 from routes.doctor_routes import doctor_bp
@@ -52,4 +56,6 @@ def handle_send_message(data):
     emit('receive_message', data, broadcast=True)
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True, host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get("FLASK_DEBUG", "true").lower() == "true"
+    socketio.run(app, host="0.0.0.0", port=port, debug=debug)

@@ -18,33 +18,45 @@ def register_doctor():
       201:
         description: Doctor registered successfully!
       400:
-        description: Error based on what went wrong.
+        description: Validation error
+      500:
+        description: Server/database error
     """
     data = request.get_json()
 
-    # hash the password before storing it
-    password = data['password']
+    if not data:
+        return jsonify({"error": "No input data provided"}), 400
+
+    # Validate required fields
+    required_fields = [
+        'first_name', 'last_name', 'email', 'password', 'license_num',
+        'license_exp_date', 'dob', 'med_school', 'years_of_practice',
+        'specialty', 'payment_fee', 'gender', 'phone_number',
+        'address', 'zipcode', 'city', 'state'
+    ]
+    missing_fields = [field for field in required_fields if not data.get(field)]
+    if missing_fields:
+        return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
+
+    # Hash the password
+    password = data.get('password')
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
-    # doctor_picture_url = None
-
-    #for the picture i'm still not sure
+    # Optional: handle doctor picture later
     doctor_picture = data.get('doctor_picture')  # Base64 encoded image data
-
-    # saving data into GCS bucket. it saves the url in the db instead of binary data.
+    # doctor_picture_url = None
     # if doctor_picture:
     #     try:
-    #         # Decode the base64 string to binary data
     #         doctor_picture = base64.b64decode(doctor_picture)
     #         filename = f"doctors/{data['first_name']}_{int(time.time())}.png"
     #         bucket = storage_client.bucket(GCS_BUCKET)
     #         blob = bucket.blob(filename)
     #         blob.upload_from_string(doctor_picture, content_type='image/png')
-    #         # blob.make_public()
     #         doctor_picture_url = blob.public_url
     #     except Exception as e:
     #         return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
-    cursor = mysql.connection.cursor()
+
+    # Prepare SQL
     query = """
         INSERT INTO DOCTOR (
             first_name, last_name, email, password, description, license_num,
@@ -52,7 +64,6 @@ def register_doctor():
             gender, phone_number, address, zipcode, city, state, doctor_picture
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
-
     values = (
         data['first_name'],
         data['last_name'],
@@ -72,16 +83,17 @@ def register_doctor():
         data['zipcode'],
         data['city'],
         data['state'],
-        data.get('doctor_picture')
-        # doctor_picture_url  # saving url instead of binary data
+        doctor_picture  # or doctor_picture_url if using GCS
     )
+
     try:
+        cursor = mysql.connection.cursor()
         cursor.execute(query, values)
         mysql.connection.commit()
         return jsonify({"message": "Doctor registered successfully!"}), 201
     except Exception as e:
         mysql.connection.rollback()
-        return jsonify({"error": str(e)}), 400
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
 
 @doctor_bp.route('/doctor/<int:doctor_id>', methods=['GET'])
 def get_doctor(doctor_id):
@@ -148,12 +160,9 @@ def login_doctor():
     Doctor Login
     ---
     responses:
-      200:
-        description: Login Successful with the Doctor ID.
-      401:
-        description: Invalid credentials.
-      404:
-        description: Doctor not found.
+      200: Login Successful with the Doctor ID.
+      401: Invalid credentials.
+      404: Doctor not found.
     """
     data = request.get_json()
     email = data.get('email')
@@ -162,11 +171,11 @@ def login_doctor():
     cursor = mysql.connection.cursor()
 
     try:
-        # Step 1: Get all emails from the first 50 entries
+        # Step 1: get "legacy" emails
         cursor.execute("SELECT email FROM DOCTOR ORDER BY doctor_id ASC LIMIT 50")
         test_emails = set(row[0] for row in cursor.fetchall())
 
-        # Step 2: Get patient info by email
+        # Step 2: get doctor by email
         cursor.execute("SELECT doctor_id, password FROM DOCTOR WHERE email = %s", (email,))
         doctor = cursor.fetchone()
 
@@ -174,14 +183,17 @@ def login_doctor():
             doctor_id, stored_password = doctor
 
             if email in test_emails:
-                # Password is in plain text
+                # Legacy: compare as plaintext
                 if password == stored_password:
                     return jsonify({"message": "Login successful (legacy plain text)", "doctor_id": doctor_id}), 200
                 else:
                     return jsonify({"error": "Invalid credentials"}), 401
             else:
-                # Password is hashed
-                if bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8')):
+                # Modern: compare using bcrypt
+                if isinstance(stored_password, str):
+                    stored_password = stored_password.encode('utf-8')
+
+                if bcrypt.checkpw(password.encode('utf-8'), stored_password):
                     return jsonify({"message": "Login successful", "doctor_id": doctor_id}), 200
                 else:
                     return jsonify({"error": "Invalid credentials"}), 401
@@ -223,13 +235,13 @@ def get_all_doctors():
     ---
     responses:
       200:
-        description: Doctor with denoted ID's information is returned
+        description: All doctors' information is returned.
     """
     cursor = mysql.connection.cursor()
     query = """
         SELECT doctor_id, first_name, last_name, email, description, license_num,
                license_exp_date, dob, med_school, specialty, years_of_practice, payment_fee,
-               gender, phone_number, address, zipcode, city, state, doctor_picture, password,
+               gender, phone_number, address, zipcode, city, state, doctor_picture,
                accepting_patients, doctor_rating, created_at, updated_at
         FROM DOCTOR
     """
@@ -238,7 +250,7 @@ def get_all_doctors():
 
     result = []
     for doc in doctors:
-        doctor_picture = doc[19]
+        doctor_picture = doc[18]  # Corrected index due to password removal
         if doctor_picture:
             if isinstance(doctor_picture, str):
                 doctor_picture = doctor_picture.encode('utf-8')
@@ -263,10 +275,10 @@ def get_all_doctors():
             "zipcode": doc[15],
             "city": doc[16],
             "state": doc[17],
-            "password": doc[18],
             "doctor_picture": doctor_picture,
-            "accepting_patients" : doc[20],
-            "doctor_rating": doc[21]
+            "accepting_patients": doc[19],
+            "doctor_rating": doc[20],
+            # created_at and updated_at are fetched but not returned
         })
 
     return jsonify(result), 200
@@ -387,7 +399,7 @@ def add_prescription():
     quantity = data.get('quantity')
 
     # Basic validation
-    if not all([patient_id, medicine_id, quantity]):
+    if patient_id is None or medicine_id is None or quantity is None:
         return jsonify({"error": "patient_id, medicine_id, and quantity are required."}), 400
 
     if not isinstance(quantity, int) or quantity <= 0:

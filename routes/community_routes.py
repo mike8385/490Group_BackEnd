@@ -237,7 +237,6 @@ def like_post():
 def add_comment():
     """
     Add a comment to a community post
-
     ---
     tags:
       - Community
@@ -247,18 +246,21 @@ def add_comment():
         application/json:
           schema:
             type: object
-            required: [post_id, user_id, comment]
+            required:
+              - post_id
+              - user_id
+              - comment_text
             properties:
               post_id:
                 type: integer
               user_id:
                 type: integer
-              comment:
+              comment_text:
                 type: string
-          example:
-            post_id: 5
-            user_id: 1
-            comment: "This is a great meal!"
+            example:
+              post_id: 5
+              user_id: 1
+              comment_text: "This is a great meal!"
     responses:
       201:
         description: Comment added successfully
@@ -302,6 +304,17 @@ def get_comments(post_id):
     ---
     tags:
       - Community
+    parameters:
+      - name: post_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    responses:
+      200:
+        description: List of comments
+      400:
+        description: Error retrieving comments
     """
     cursor = mysql.connection.cursor()
     query = """
@@ -345,15 +358,17 @@ def save_post():
         application/json:
           schema:
             type: object
-            required: [post_id, user_id]
+            required:
+              - post_id
+              - user_id
             properties:
               post_id:
                 type: integer
               user_id:
                 type: integer
-          example:
-            post_id: 5
-            user_id: 1
+            example:
+              post_id: 5
+              user_id: 1
     responses:
       201:
         description: Post saved successfully
@@ -396,6 +411,28 @@ def get_saved(user_id):
     ---
     tags:
       - Community
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - post_id
+              - user_id
+            properties:
+              post_id:
+                type: integer
+              user_id:
+                type: integer
+            example:
+              post_id: 5
+              user_id: 1
+    responses:
+      201:
+        description: Post saved successfully
+      400:
+        description: Input error or database failure
     """
     cursor = mysql.connection.cursor()
     query = """

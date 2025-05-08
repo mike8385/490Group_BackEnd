@@ -233,7 +233,195 @@ def like_post():
         cursor.close()
 
 # add a comment
+@comm_bp.route('/posts/comment', methods=['POST'])
+def add_comment():
+    """
+    Add a comment to a community post
+
+    ---
+    tags:
+      - Community
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [post_id, user_id, comment]
+            properties:
+              post_id:
+                type: integer
+              user_id:
+                type: integer
+              comment:
+                type: string
+          example:
+            post_id: 5
+            user_id: 1
+            comment: "This is a great meal!"
+    responses:
+      201:
+        description: Comment added successfully
+      400:
+        description: Input error or database failure
+    """
+    data = request.get_json()
+    post_id = data.get('post_id')
+    user_id = data.get('user_id')
+    comment_text = data.get('comment_text')
+
+    cursor = mysql.connection.cursor()
+
+    try:
+        # Insert comment into the database
+        cursor.execute("""
+            INSERT INTO POST_COMMENTS (post_id, user_id, comment_text)
+            VALUES (%s, %s, %s)
+        """, (post_id, user_id, comment_text))
+
+        mysql.connection.commit()
+
+        return jsonify({
+            "message": "Comment added successfully.",
+            "post_id": post_id,
+            "user_id": user_id,
+            "comment": comment_text
+        }), 201
+
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()
 
 # get all comments for a post
+@comm_bp.route('/posts/comment/<int:post_id>', methods=['GET'])
+def get_comments(post_id):
+    """
+    Get all comments for a post
+    ---
+    tags:
+      - Community
+    """
+    cursor = mysql.connection.cursor()
+    query = """
+        SELECT PC.comment_id, PC.post_id, PC.user_id, PC.comment_text, PC.created_at,
+          COALESCE(P.first_name, D.first_name) AS first_name,
+          COALESCE(P.last_name, D.last_name) AS last_name
+        FROM POST_COMMENTS AS PC
+        JOIN USER AS U ON PC.user_id = U.user_id
+        LEFT JOIN PATIENT AS P ON U.patient_id = P.patient_id
+        LEFT JOIN DOCTOR AS D ON U.doctor_id = D.doctor_id
+        WHERE PC.post_id = %s
+        ORDER BY PC.created_at DESC;
+    """
+    cursor.execute(query, (post_id,))
+    comments = cursor.fetchall()
 
-# add post to meal plan
+    result = []
+    for comment in comments:
+        result.append({
+            "comment_id": comment[0],
+            "post_id": comment[1],
+            "user_id": comment[2],
+            "comment_text": comment[3],
+            "created_at": comment[4],
+            "first_name": comment[5],
+            "last_name": comment[6]
+        })
+    return jsonify(result), 200
+
+# Save a post/meal
+@comm_bp.route('/posts/save', methods=['POST'])
+def save_post():
+    """
+    Save a post/meal
+    ---
+    tags:
+      - Community
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [post_id, user_id]
+            properties:
+              post_id:
+                type: integer
+              user_id:
+                type: integer
+          example:
+            post_id: 5
+            user_id: 1
+    responses:
+      201:
+        description: Post saved successfully
+      400:
+        description: Input error or database failure
+    """
+    data = request.get_json()
+    user_id = data.get('user_id')
+    post_id = data.get('post_id')
+    meal_id = post_id
+
+    cursor = mysql.connection.cursor()
+
+    try:
+        # Insert into saved posts table
+        cursor.execute("""
+            INSERT INTO SAVED_MEAL (user_id, meal_id, post_id)
+            VALUES (%s, %s, %s)
+        """, (user_id, post_id, meal_id))
+
+        mysql.connection.commit()
+
+        return jsonify({
+            "message": "Post saved successfully.",
+            "post_id": post_id,
+            "user_id": user_id
+        }), 201
+
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()
+
+# get saved posts/meals by id
+@comm_bp.route('/posts/save/<int:user_id>', methods=['GET'])
+def get_saved(user_id):
+    """
+    Get saved posts/meals by user_id
+    ---
+    tags:
+      - Community
+    """
+    cursor = mysql.connection.cursor()
+    query = """
+        SELECT SM.saved_meal_id, SM.user_id, SM.meal_id, SM.post_id, M.meal_name, M.meal_calories,
+          COALESCE(P.first_name, D.first_name) AS first_name,
+          COALESCE(P.last_name, D.last_name) AS last_name
+        FROM SAVED_MEAL AS SM
+        JOIN MEAL AS M ON SM.meal_id = M.meal_id
+        JOIN USER AS U ON SM.user_id = U.user_id
+        LEFT JOIN PATIENT AS P ON U.patient_id = P.patient_id
+        LEFT JOIN DOCTOR AS D ON U.doctor_id = D.doctor_id
+        WHERE SM.user_id = %s;
+    """
+    cursor.execute(query, (user_id,))
+    saved_posts = cursor.fetchall()
+
+    result = []
+    for post in saved_posts:
+        result.append({
+            "saved_meal_id": post[0],
+            "user_id": post[1],
+            "meal_id": post[2],
+            "post_id": post[3],
+            "meal_name": post[4],
+            "meal_calories": post[5],
+            "first_name": post[6],
+            "last_name": post[7]
+        })
+    return jsonify(result), 200

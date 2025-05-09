@@ -18,7 +18,7 @@ def send_chat_message():
     try:
         # Step 1: Get patient_id and doctor_id from patient_appointment
         cursor.execute("""
-            SELECT patient_id, doctor_id FROM patient_appointment
+            SELECT patient_id, doctor_id FROM PATIENT_APPOINTMENT
             WHERE patient_appt_id = %s
         """, (appointment_id,))
         row = cursor.fetchone()
@@ -29,14 +29,14 @@ def send_chat_message():
 
         # Step 2: Get corresponding user_ids from user table
         if sender_type == "patient":
-            cursor.execute("SELECT user_id FROM user WHERE patient_id = %s", (patient_id,))
+            cursor.execute("SELECT user_id FROM USER WHERE patient_id = %s", (patient_id,))
             sender_row = cursor.fetchone()
-            cursor.execute("SELECT user_id FROM user WHERE doctor_id = %s", (doctor_id,))
+            cursor.execute("SELECT user_id FROM USER WHERE doctor_id = %s", (doctor_id,))
             receiver_row = cursor.fetchone()
         else:
-            cursor.execute("SELECT user_id FROM user WHERE doctor_id = %s", (doctor_id,))
+            cursor.execute("SELECT user_id FROM USER WHERE doctor_id = %s", (doctor_id,))
             sender_row = cursor.fetchone()
-            cursor.execute("SELECT user_id FROM user WHERE patient_id = %s", (patient_id,))
+            cursor.execute("SELECT user_id FROM USER WHERE patient_id = %s", (patient_id,))
             receiver_row = cursor.fetchone()
 
         if not sender_row or not receiver_row:
@@ -66,7 +66,7 @@ def get_chat_messages(appointment_id):
     try:
         cursor.execute("""
             SELECT sender_id, receiver_id, message, sent_at
-            FROM chat
+            FROM CHAT
             WHERE appt_id = %s
             ORDER BY sent_at ASC
         """, (appointment_id,))
@@ -92,9 +92,9 @@ def get_user_by_role_id():
     cursor = mysql.connection.cursor()
     try:
         if patient_id:
-            cursor.execute("SELECT * FROM user WHERE patient_id = %s", (patient_id,))
+            cursor.execute("SELECT * FROM USER WHERE patient_id = %s", (patient_id,))
         elif doctor_id:
-            cursor.execute("SELECT * FROM user WHERE doctor_id = %s", (doctor_id,))
+            cursor.execute("SELECT * FROM USER WHERE doctor_id = %s", (doctor_id,))
         else:
             return jsonify({'error': 'You must provide either patient_id or doctor_id'}), 400
 

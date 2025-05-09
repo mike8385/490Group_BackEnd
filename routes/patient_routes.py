@@ -1177,7 +1177,7 @@ def get_upcoming_appointments(patient_id):
         FROM 
             PATIENT_APPOINTMENT PA
         JOIN 
-            doctor D ON PA.doctor_id = D.doctor_id
+            DOCTOR D ON PA.doctor_id = D.doctor_id
         WHERE 
             PA.patient_id = %s 
             AND PA.appointment_datetime >= NOW()
@@ -1223,7 +1223,7 @@ def get_past_appointments(patient_id):
         FROM 
             PATIENT_APPOINTMENT PA
         JOIN 
-            doctor D ON PA.doctor_id = D.doctor_id
+            DOCTOR D ON PA.doctor_id = D.doctor_id
         WHERE 
             PA.patient_id = %s 
             AND PA.appointment_datetime < NOW()

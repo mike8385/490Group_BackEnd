@@ -1,8 +1,13 @@
 import pika
 import json
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 
 def send_medication_request(prescription_data):
-    connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+    rabbitmq_url = os.getenv('RABBITMQ_URL')
+    connection = pika.BlockingConnection(pika.URLParameters(rabbitmq_url))
     channel = connection.channel()
 
     channel.queue_declare(queue='medication_requests', durable=True)

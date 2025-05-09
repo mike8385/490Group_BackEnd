@@ -54,6 +54,83 @@ def get_all_posts():
     return jsonify(result), 200
 
 # add community post
+@comm_bp.route('/add-post', methods=['POST'])
+def add_post():
+    """
+    Add a community post
+
+    ---
+    tags:
+      - Community
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - user_id
+              - description
+              - picture
+            properties:
+              user_id:
+                type: integer
+              meal_id:
+                type: integer
+              description:
+                type: string
+              picture:
+                type: string
+            example:
+              user_id: 1
+              meal_id: 5
+              description: "Amazing dish with lots of protein!"
+    responses:
+      201:
+        description: Post added successfully
+      400:
+        description: Input error or database failure
+    """
+    data = request.get_json()
+    user_id = data.get('user_id')
+    meal_name = data.get('meal_name')
+    meal_calories = data.get('meal_calories')
+    description = data.get('description')
+    picture = data.get('picture')
+
+    cursor = mysql.connection.cursor()
+
+    try:
+        cursor.execute("""
+            INSERT INTO MEAL (meal_name, meal_calories)
+            VALUES (%s, %s)
+        """, (meal_name, meal_calories))
+
+        meal_id = cursor.lastrowid
+
+        cursor.execute("""
+            INSERT INTO COMMUNITY_POST (meal_id, user_id, description, picture)
+            VALUES (%s, %s, %s, %s)
+        """, (meal_id, user_id, description, picture))
+
+        mysql.connection.commit()
+
+        return jsonify({
+            "message": "Post added successfully.",
+            "meal_id": meal_id,
+            "user_id": user_id,
+            "meal_name": meal_name,
+            "meal_calories": meal_calories,
+            "description": description,
+            "picture": picture
+        }), 201
+
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()
+
 
 # get liked posts /posts/liked?patient_id=5
 @comm_bp.route('/posts/liked', methods=['GET'])

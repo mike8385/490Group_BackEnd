@@ -255,7 +255,7 @@ def test_update_appointment_status_deny(client):
 
         assert response.status_code == 200
         data = response.get_json()
-        assert data['message'] == "Appointment denied and deleted successfully."
+        assert data['message'] == "Appointment denied (status set to 0.5) successfully."
 
 def test_update_appointment_status_invalid_input(client):
     response = client.patch('/doc-appointments-status/42', json={"accepted": 2})

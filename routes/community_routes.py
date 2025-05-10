@@ -33,6 +33,24 @@ def get_posts(post_id):
 
     if not post:
         return jsonify({"error": "Post not found."}), 404
+    
+    like_query = """
+        SELECT COUNT(*)
+        FROM LIKED_POSTS AS LP
+        WHERE LP.post_id = %s;
+    """
+    cursor.execute(like_query, (post_id,))
+    like_count = cursor.fetchone()[0]
+
+    comment_query = """
+        SELECT COUNT(*)
+        FROM POST_COMMENTS AS PC
+        WHERE PC.post_id = %s;
+    """
+    cursor.execute(comment_query, (post_id,))
+    comment_count = cursor.fetchone()[0]
+
+    mysql.connection.commit()
 
     post_picture = post[4]
     if post_picture:
@@ -52,6 +70,8 @@ def get_posts(post_id):
         "first_name": post[8],
         "last_name": post[9],
         "tag": post[10], # meal plan name, but we're using this as a tag
+        "like_count": like_count,
+        "comment_count": comment_count
     }
     return jsonify(result), 200
 
@@ -68,7 +88,9 @@ def get_all_posts():
           M.meal_name, M.meal_calories,
           COALESCE(P.first_name, D.first_name) AS first_name,
           COALESCE(P.last_name, D.last_name) AS last_name,
-          MP.meal_plan_name
+          MP.meal_plan_name,
+          COALESCE(likes.like_count, 0) AS like_count,
+          COALESCE(comments.comment_count, 0) AS comment_count
         FROM COMMUNITY_POST AS CP
         JOIN MEAL AS M ON CP.meal_id = M.meal_id
         JOIN USER AS U ON CP.user_id = U.user_id
@@ -76,6 +98,16 @@ def get_all_posts():
         LEFT JOIN DOCTOR AS D ON U.doctor_id = D.doctor_id
         LEFT JOIN MEAL_PLAN_ENTRY AS MPE ON CP.meal_id = MPE.meal_id
         LEFT JOIN MEAL_PLAN AS MP ON MPE.meal_plan_id = MP.meal_plan_id
+        LEFT JOIN (
+            SELECT post_id, COUNT(*) AS like_count
+            FROM LIKED_POSTS
+            GROUP BY post_id
+        ) AS likes ON CP.post_id = likes.post_id
+        LEFT JOIN (
+            SELECT post_id, COUNT(*) AS comment_count
+            FROM POST_COMMENTS
+            GROUP BY post_id
+        ) AS comments ON CP.post_id = comments.post_id
         ORDER BY CP.post_id DESC;
     """
     cursor.execute(query)
@@ -101,6 +133,8 @@ def get_all_posts():
             "first_name": post[8],
             "last_name": post[9],
             "tag": post[10], # meal plan name, but we're using this as a tag
+            "like_count": post[11] if post[11] is not None else 0,
+            "comment_count": post[12] if post[12] is not None else 0
         })
     return jsonify(result), 200
 
@@ -351,15 +385,96 @@ def like_post():
 
     except Exception as e:
         mysql.connection.rollback()
-        error_message = str(e)
-        
-        if "Duplicate entry" in error_message:
-            return jsonify({"error": "You have already liked this post."}), 409
-        
+        error_message = str(e)  
         return jsonify({"error": error_message}), 400
     finally:
         cursor.close()
 
+  
+# unlike a post, remove it from liked post table
+@comm_bp.route('/posts/unlike', methods=['DELETE'])
+def unlike_post():
+    """
+    Unlike a community post
+
+    ---
+    tags:
+      - Community
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [post_id]
+            properties:
+              post_id:
+                type: integer
+              patient_id:
+                type: integer
+              doctor_id:
+                type: integer
+          example:
+            post_id: 5
+            patient_id: 1
+    responses:
+      200:
+        description: Post unliked successfully
+      400:
+        description: Input error or database failure
+      404:
+        description: User not found or post not liked
+    """
+    data = request.get_json()
+    post_id = data.get('post_id')
+    patient_id = data.get('patient_id')
+    doctor_id = data.get('doctor_id')
+
+    cursor = mysql.connection.cursor()
+
+    try:
+        # Get user_id
+        if patient_id:
+            cursor.execute("""
+                SELECT user_id
+                FROM USER
+                WHERE patient_id = %s
+            """, (patient_id,))
+        else:
+            cursor.execute("""
+                SELECT user_id
+                FROM USER
+                WHERE doctor_id = %s
+            """, (doctor_id,))
+
+        user_result = cursor.fetchone()
+
+        if not user_result:
+            return jsonify({"error": "User not found."}), 404
+
+        user_id = user_result[0]
+
+        # Remove like from LIKED_POSTS table
+        cursor.execute("""
+            DELETE FROM LIKED_POSTS 
+            WHERE post_id = %s AND user_id = %s;
+        """, (post_id, user_id))
+
+        mysql.connection.commit()
+
+        return jsonify({
+            "message": "Post unliked successfully.",
+            "post_id": post_id,
+            "user_id": user_id,
+        }), 200
+
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+
+    finally:
+        cursor.close()
+        
 # add a comment
 @comm_bp.route('/posts/comment', methods=['POST'])
 def add_comment():

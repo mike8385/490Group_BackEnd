@@ -237,18 +237,20 @@ def get_patient(patient_id):
 
     query = """
         SELECT 
-            patient_id,
-            patient_email,
-            first_name,
-            last_name,
-            doctor_id,
-            pharmacy_id,
-            profile_pic,
-            insurance_provider,
-            insurance_policy_number,
-            insurance_expiration_date
-        FROM PATIENT
-        WHERE patient_id = %s
+            p.patient_id,
+            p.patient_email,
+            p.first_name,
+            p.last_name,
+            p.doctor_id,
+            p.pharmacy_id,
+            p.profile_pic,
+            p.insurance_provider,
+            p.insurance_policy_number,
+            p.insurance_expiration_date,
+            u.user_id
+        FROM PATIENT AS p
+        JOIN USER AS u ON p.patient_id = u.patient_id
+        WHERE p.patient_id = %s
     """
 
     try:
@@ -259,7 +261,7 @@ def get_patient(patient_id):
             keys = [
                 'patient_id', 'patient_email', 'first_name', 'last_name',
                 'doctor_id', 'pharmacy_id', 'profile_pic',
-                'insurance_provider', 'insurance_policy_number', 'insurance_expiration_date'
+                'insurance_provider', 'insurance_policy_number', 'insurance_expiration_date', 'user_id'
             ]
             patient_info = dict(zip(keys, result))
             return jsonify(patient_info), 200

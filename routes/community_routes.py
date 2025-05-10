@@ -18,7 +18,12 @@ def get_posts(post_id):
           M.meal_name, M.meal_calories,
           COALESCE(P.first_name, D.first_name) AS first_name,
           COALESCE(P.last_name, D.last_name) AS last_name,
-          MP.meal_plan_name
+          (
+            SELECT GROUP_CONCAT(DISTINCT MP.meal_plan_name SEPARATOR ', ')
+            FROM MEAL_PLAN_ENTRY AS MPE
+            JOIN MEAL_PLAN AS MP ON MPE.meal_plan_id = MP.meal_plan_id
+            WHERE MPE.meal_id = CP.meal_id
+          ) AS tag
         FROM COMMUNITY_POST AS CP
         JOIN MEAL AS M ON CP.meal_id = M.meal_id
         JOIN USER AS U ON CP.user_id = U.user_id
@@ -84,11 +89,17 @@ def get_all_posts():
     """
     cursor = mysql.connection.cursor()
     query = """
-        SELECT CP.post_id, CP.meal_id, CP.user_id, CP.description, CP.picture, CP.created_at,
+        SELECT 
+          CP.post_id, CP.meal_id, CP.user_id, CP.description, CP.picture, CP.created_at,
           M.meal_name, M.meal_calories,
           COALESCE(P.first_name, D.first_name) AS first_name,
           COALESCE(P.last_name, D.last_name) AS last_name,
-          MP.meal_plan_name,
+          (
+            SELECT GROUP_CONCAT(DISTINCT MP.meal_plan_name SEPARATOR ', ')
+            FROM MEAL_PLAN_ENTRY AS MPE
+            JOIN MEAL_PLAN AS MP ON MPE.meal_plan_id = MP.meal_plan_id
+            WHERE MPE.meal_id = CP.meal_id
+          ) AS tag,
           COALESCE(likes.like_count, 0) AS like_count,
           COALESCE(comments.comment_count, 0) AS comment_count
         FROM COMMUNITY_POST AS CP
@@ -96,8 +107,6 @@ def get_all_posts():
         JOIN USER AS U ON CP.user_id = U.user_id
         LEFT JOIN PATIENT AS P ON U.patient_id = P.patient_id
         LEFT JOIN DOCTOR AS D ON U.doctor_id = D.doctor_id
-        LEFT JOIN MEAL_PLAN_ENTRY AS MPE ON CP.meal_id = MPE.meal_id
-        LEFT JOIN MEAL_PLAN AS MP ON MPE.meal_plan_id = MP.meal_plan_id
         LEFT JOIN (
             SELECT post_id, COUNT(*) AS like_count
             FROM LIKED_POSTS
@@ -679,15 +688,23 @@ def get_saved(user_id):
     """
     cursor = mysql.connection.cursor()
     query = """
-        SELECT SM.saved_meal_id, SM.user_id, SM.meal_id, SM.post_id, M.meal_name, M.meal_calories,
-          COALESCE(P.first_name, D.first_name) AS first_name,
-          COALESCE(P.last_name, D.last_name) AS last_name
+        SELECT SM.saved_meal_id, SM.user_id, SM.meal_id, SM.post_id,
+               M.meal_name, M.meal_calories,
+               COALESCE(P.first_name, D.first_name) AS first_name,
+               COALESCE(P.last_name, D.last_name) AS last_name,
+               (
+                 SELECT GROUP_CONCAT(DISTINCT MP.meal_plan_name SEPARATOR ', ')
+                 FROM MEAL_PLAN_ENTRY AS MPE
+                 JOIN MEAL_PLAN AS MP ON MPE.meal_plan_id = MP.meal_plan_id
+                 WHERE MPE.meal_id = SM.meal_id
+               ) AS tag
         FROM SAVED_MEAL AS SM
         JOIN MEAL AS M ON SM.meal_id = M.meal_id
         JOIN USER AS U ON SM.user_id = U.user_id
         LEFT JOIN PATIENT AS P ON U.patient_id = P.patient_id
         LEFT JOIN DOCTOR AS D ON U.doctor_id = D.doctor_id
-        WHERE SM.user_id = %s;
+        WHERE SM.user_id = %s
+        ORDER BY SM.saved_meal_id DESC;
     """
     cursor.execute(query, (user_id,))
     saved_posts = cursor.fetchall()
@@ -702,6 +719,7 @@ def get_saved(user_id):
             "meal_name": post[4],
             "meal_calories": post[5],
             "first_name": post[6],
-            "last_name": post[7]
+            "last_name": post[7],
+            "tag": post[8]
         })
     return jsonify(result), 200

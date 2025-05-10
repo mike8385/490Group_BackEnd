@@ -4,7 +4,7 @@ import bcrypt, base64
 
 comm_bp = Blueprint('comm_bp', __name__)
 
-# get a post by id
+# get a post by post_id
 @comm_bp.route('/posts/<int:post_id>', methods=['GET'])
 def get_posts(post_id):
     """
@@ -83,12 +83,84 @@ def get_posts(post_id):
     }
     return jsonify(result), 200
 
+# get post by the creator's id
+@comm_bp.route('/posts/user/<int:user_id>', methods=['GET'])
+def get_posts_by_user(user_id):
+    """
+    Retrieve community posts by user ID
+    tags:
+      - Community
+    """
+    cursor = mysql.connection.cursor()
+    query = """
+        SELECT CP.post_id, CP.meal_id, CP.user_id, CP.description, CP.picture, CP.created_at,
+          M.meal_name, M.meal_calories,
+          COALESCE(P.first_name, D.first_name) AS first_name,
+          COALESCE(P.last_name, D.last_name) AS last_name,
+          CONCAT_WS(', ',
+            (
+                SELECT GROUP_CONCAT(DISTINCT MP.meal_plan_name SEPARATOR ', ')
+                FROM MEAL_PLAN_ENTRY AS MPE
+                JOIN MEAL_PLAN AS MP ON MPE.meal_plan_id = MP.meal_plan_id
+                WHERE MPE.meal_id = CP.meal_id
+            ),
+            CP.add_tag
+        ) AS tag,
+        COALESCE(likes.like_count, 0) AS like_count,
+        COALESCE(comments.comment_count, 0) AS comment_count
+        FROM COMMUNITY_POST AS CP
+        JOIN MEAL AS M ON CP.meal_id = M.meal_id
+        JOIN USER AS U ON CP.user_id = U.user_id
+        LEFT JOIN PATIENT AS P ON U.patient_id = P.patient_id
+        LEFT JOIN DOCTOR AS D ON U.doctor_id = D.doctor_id
+        LEFT JOIN (
+            SELECT post_id, COUNT(*) AS like_count
+            FROM LIKED_POSTS
+            GROUP BY post_id
+        ) AS likes ON CP.post_id = likes.post_id
+        LEFT JOIN (
+            SELECT post_id, COUNT(*) AS comment_count
+            FROM POST_COMMENTS
+            GROUP BY post_id
+        ) AS comments ON CP.post_id = comments.post_id
+        WHERE CP.user_id = %s;
+    """
+    cursor.execute(query, (user_id,))
+    posts = cursor.fetchall()
+
+    if not posts:
+        return jsonify({"error": "No posts found for this user."}), 404
+
+    result = []
+    for post in posts:
+        post_picture = post[4]
+        if post_picture:
+            if isinstance(post_picture, str):
+                post_picture = post_picture.encode('utf-8')
+            post_picture = base64.b64encode(post_picture).decode('utf-8')
+
+        result.append({
+            "post_id": post[0],
+            "meal_id": post[1],
+            "user_id": post[2],
+            "description": post[3],
+            "picture": post_picture,
+            "created_at": post[5],
+            "meal_name": post[6],
+            "meal_calories": post[7],
+            "first_name": post[8],
+            "last_name": post[9],
+            "tag": post[10], # meal plan name, but we're using this as a tag
+            "like_count": post[11] if post[11] is not None else 0,
+            "comment_count": post[12] if post[12] is not None else 0
+        })
+    return jsonify(result), 200
+
 # get all community posts
 @comm_bp.route('/posts', methods=['GET'])
 def get_all_posts():
     """
     Retrieve all community posts
-
     """
     cursor = mysql.connection.cursor()
     query = """
@@ -302,14 +374,39 @@ def get_liked_posts():
         if not liked_posts:
             return jsonify({"message": "No liked posts found for this user."}), 200
 
+        post_ids = tuple(post[1] for post in liked_posts)
+
+        # Like counts
+        cursor.execute("""
+            SELECT post_id, COUNT(*) AS like_count
+            FROM LIKED_POSTS
+            WHERE post_id IN %s
+            GROUP BY post_id
+        """, (post_ids,))
+
+        like_counts = {row[0]: row[1] for row in cursor.fetchall()}
+
+        # Comment counts
+        cursor.execute("""
+            SELECT post_id, COUNT(*) AS comment_count
+            FROM POST_COMMENTS
+            WHERE post_id IN %s
+            GROUP BY post_id
+        """, (post_ids,))
+
+        comment_counts = {row[0]: row[1] for row in cursor.fetchall()}
+
         results = []
         for post in liked_posts:
-            results.append({
-                "liked_id": post[0],
-                "post_id": post[1],
-                "user_id": post[2],
-                "liked_at": post[3]
-            })
+          post_id = post[1]
+          results.append({
+              "liked_id": post[0],
+              "post_id": post_id,
+              "user_id": post[2],
+              "liked_at": post[3],
+              "liked_count": like_counts.get(post_id, 0),
+              "comment_count": comment_counts.get(post_id, 0)
+          })
 
         return jsonify({
             "user_id": user_id,

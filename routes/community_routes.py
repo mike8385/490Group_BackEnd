@@ -831,3 +831,44 @@ def get_saved(user_id):
             "tag": post[8]
         })
     return jsonify(result), 200
+
+# if post is saved
+@comm_bp.route('/posts/is_saved', methods=['POST'])
+def is_saved():
+    """
+    Check if a post is saved by a user
+    """
+    data = request.get_json()
+    user_id = data.get('user_id')
+    post_id = data.get('post_id')
+
+    cursor = mysql.connection.cursor()
+    try:
+        cursor.execute("""
+            SELECT 1 FROM SAVED_MEAL WHERE user_id = %s AND post_id = %s
+        """, (user_id, post_id))
+        result = cursor.fetchone()
+        return jsonify({"is_saved": result is not None}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()
+
+@comm_bp.route('/posts/unsave', methods=['DELETE'])
+def unsave_post():
+    data = request.get_json()
+    user_id = data.get('user_id')
+    post_id = data.get('post_id')
+
+    cursor = mysql.connection.cursor()
+    try:
+        cursor.execute("""
+            DELETE FROM SAVED_MEAL WHERE user_id = %s AND post_id = %s
+        """, (user_id, post_id))
+        mysql.connection.commit()
+        return jsonify({"message": "Post unsaved successfully."}), 200
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()

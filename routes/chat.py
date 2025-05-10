@@ -47,7 +47,7 @@ def send_chat_message():
 
         # Step 3: Insert into chat
         cursor.execute("""
-            INSERT INTO chat (appt_id, sender_id, receiver_id, message, sent_at)
+            INSERT INTO CHAT (appt_id, sender_id, receiver_id, message, sent_at)
             VALUES (%s, %s, %s, %s, %s)
         """, (appointment_id, sender_id, receiver_id, message, sent_at))
 
@@ -88,6 +88,9 @@ def get_chat_messages(appointment_id):
 def get_user_by_role_id():
     patient_id = request.args.get('patient_id')
     doctor_id = request.args.get('doctor_id')
+
+    patient_id = patient_id.strip() if patient_id else None
+    doctor_id = doctor_id.strip() if doctor_id else None
 
     cursor = mysql.connection.cursor()
     try:

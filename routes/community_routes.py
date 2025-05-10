@@ -4,7 +4,58 @@ import bcrypt, base64
 
 comm_bp = Blueprint('comm_bp', __name__)
 
-# get community post
+# get a post by id
+@comm_bp.route('/posts/<int:post_id>', methods=['GET'])
+def get_posts(post_id):
+    """
+    Retrieve community post by ID
+    tags:
+      - Community
+    """
+    cursor = mysql.connection.cursor()
+    query = """
+        SELECT CP.post_id, CP.meal_id, CP.user_id, CP.description, CP.picture, CP.created_at,
+          M.meal_name, M.meal_calories,
+          COALESCE(P.first_name, D.first_name) AS first_name,
+          COALESCE(P.last_name, D.last_name) AS last_name,
+          MP.meal_plan_name
+        FROM COMMUNITY_POST AS CP
+        JOIN MEAL AS M ON CP.meal_id = M.meal_id
+        JOIN USER AS U ON CP.user_id = U.user_id
+        LEFT JOIN PATIENT AS P ON U.patient_id = P.patient_id
+        LEFT JOIN DOCTOR AS D ON U.doctor_id = D.doctor_id
+        LEFT JOIN MEAL_PLAN_ENTRY AS MPE ON CP.meal_id = MPE.meal_id
+        LEFT JOIN MEAL_PLAN AS MP ON MPE.meal_plan_id = MP.meal_plan_id
+        WHERE CP.post_id = %s;
+    """
+    cursor.execute(query, (post_id,))
+    post = cursor.fetchone()
+
+    if not post:
+        return jsonify({"error": "Post not found."}), 404
+
+    post_picture = post[4]
+    if post_picture:
+        if isinstance(post_picture, str):
+            post_picture = post_picture.encode('utf-8')
+        post_picture = base64.b64encode(post_picture).decode('utf-8')
+
+    result = {
+        "post_id": post[0],
+        "meal_id": post[1],
+        "user_id": post[2],
+        "description": post[3],
+        "picture": post_picture,
+        "created_at": post[5],
+        "meal_name": post[6],
+        "meal_calories": post[7],
+        "first_name": post[8],
+        "last_name": post[9],
+        "tag": post[10], # meal plan name, but we're using this as a tag
+    }
+    return jsonify(result), 200
+
+# get all community posts
 @comm_bp.route('/posts', methods=['GET'])
 def get_all_posts():
     """
@@ -54,6 +105,83 @@ def get_all_posts():
     return jsonify(result), 200
 
 # add community post
+@comm_bp.route('/add-post', methods=['POST'])
+def add_post():
+    """
+    Add a community post
+
+    ---
+    tags:
+      - Community
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - user_id
+              - description
+              - picture
+            properties:
+              user_id:
+                type: integer
+              meal_id:
+                type: integer
+              description:
+                type: string
+              picture:
+                type: string
+            example:
+              user_id: 1
+              meal_id: 5
+              description: "Amazing dish with lots of protein!"
+    responses:
+      201:
+        description: Post added successfully
+      400:
+        description: Input error or database failure
+    """
+    data = request.get_json()
+    user_id = data.get('user_id')
+    meal_name = data.get('meal_name')
+    meal_calories = data.get('meal_calories')
+    description = data.get('description')
+    picture = data.get('picture')
+
+    cursor = mysql.connection.cursor()
+
+    try:
+        cursor.execute("""
+            INSERT INTO MEAL (meal_name, meal_calories)
+            VALUES (%s, %s)
+        """, (meal_name, meal_calories))
+
+        meal_id = cursor.lastrowid
+
+        cursor.execute("""
+            INSERT INTO COMMUNITY_POST (meal_id, user_id, description, picture)
+            VALUES (%s, %s, %s, %s)
+        """, (meal_id, user_id, description, picture))
+
+        mysql.connection.commit()
+
+        return jsonify({
+            "message": "Post added successfully.",
+            "meal_id": meal_id,
+            "user_id": user_id,
+            "meal_name": meal_name,
+            "meal_calories": meal_calories,
+            "description": description,
+            "picture": picture
+        }), 201
+
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()
+
 
 # get liked posts /posts/liked?patient_id=5
 @comm_bp.route('/posts/liked', methods=['GET'])

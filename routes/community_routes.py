@@ -18,12 +18,15 @@ def get_posts(post_id):
           M.meal_name, M.meal_calories,
           COALESCE(P.first_name, D.first_name) AS first_name,
           COALESCE(P.last_name, D.last_name) AS last_name,
-          (
-            SELECT GROUP_CONCAT(DISTINCT MP.meal_plan_name SEPARATOR ', ')
-            FROM MEAL_PLAN_ENTRY AS MPE
-            JOIN MEAL_PLAN AS MP ON MPE.meal_plan_id = MP.meal_plan_id
-            WHERE MPE.meal_id = CP.meal_id
-          ) AS tag
+          CONCAT_WS(', ',
+            (
+                SELECT GROUP_CONCAT(DISTINCT MP.meal_plan_name SEPARATOR ', ')
+                FROM MEAL_PLAN_ENTRY AS MPE
+                JOIN MEAL_PLAN AS MP ON MPE.meal_plan_id = MP.meal_plan_id
+                WHERE MPE.meal_id = CP.meal_id
+            ),
+            CP.add_tag
+        ) AS tag
         FROM COMMUNITY_POST AS CP
         JOIN MEAL AS M ON CP.meal_id = M.meal_id
         JOIN USER AS U ON CP.user_id = U.user_id
@@ -94,11 +97,14 @@ def get_all_posts():
           M.meal_name, M.meal_calories,
           COALESCE(P.first_name, D.first_name) AS first_name,
           COALESCE(P.last_name, D.last_name) AS last_name,
-          (
-            SELECT GROUP_CONCAT(DISTINCT MP.meal_plan_name SEPARATOR ', ')
-            FROM MEAL_PLAN_ENTRY AS MPE
-            JOIN MEAL_PLAN AS MP ON MPE.meal_plan_id = MP.meal_plan_id
-            WHERE MPE.meal_id = CP.meal_id
+          CONCAT_WS(', ',
+              (
+                  SELECT GROUP_CONCAT(DISTINCT MP.meal_plan_name SEPARATOR ', ')
+                  FROM MEAL_PLAN_ENTRY AS MPE
+                  JOIN MEAL_PLAN AS MP ON MPE.meal_plan_id = MP.meal_plan_id
+                  WHERE MPE.meal_id = CP.meal_id
+              ),
+              CP.add_tag
           ) AS tag,
           COALESCE(likes.like_count, 0) AS like_count,
           COALESCE(comments.comment_count, 0) AS comment_count
@@ -191,21 +197,22 @@ def add_post():
     meal_calories = data.get('meal_calories')
     description = data.get('description')
     picture = data.get('picture')
+    add_tag = data.get('add_tag')
 
     cursor = mysql.connection.cursor()
 
     try:
         cursor.execute("""
-            INSERT INTO MEAL (meal_name, meal_calories)
-            VALUES (%s, %s)
-        """, (meal_name, meal_calories))
+            INSERT INTO MEAL (meal_name, meal_description, meal_calories)
+            VALUES (%s, %s, %s)
+        """, (meal_name, description, meal_calories))
 
         meal_id = cursor.lastrowid
 
         cursor.execute("""
-            INSERT INTO COMMUNITY_POST (meal_id, user_id, description, picture)
-            VALUES (%s, %s, %s, %s)
-        """, (meal_id, user_id, description, picture))
+            INSERT INTO COMMUNITY_POST (meal_id, user_id, description, picture, add_tag)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (meal_id, user_id, description, picture, add_tag))
 
         mysql.connection.commit()
 
@@ -216,7 +223,8 @@ def add_post():
             "meal_name": meal_name,
             "meal_calories": meal_calories,
             "description": description,
-            "picture": picture
+            "picture": picture,
+            "add_tag": add_tag
         }), 201
 
     except Exception as e:
@@ -692,12 +700,15 @@ def get_saved(user_id):
                M.meal_name, M.meal_calories,
                COALESCE(P.first_name, D.first_name) AS first_name,
                COALESCE(P.last_name, D.last_name) AS last_name,
-               (
-                 SELECT GROUP_CONCAT(DISTINCT MP.meal_plan_name SEPARATOR ', ')
-                 FROM MEAL_PLAN_ENTRY AS MPE
-                 JOIN MEAL_PLAN AS MP ON MPE.meal_plan_id = MP.meal_plan_id
-                 WHERE MPE.meal_id = SM.meal_id
-               ) AS tag
+               CONCAT_WS(', ',
+                  (
+                      SELECT GROUP_CONCAT(DISTINCT MP.meal_plan_name SEPARATOR ', ')
+                      FROM MEAL_PLAN_ENTRY AS MPE
+                      JOIN MEAL_PLAN AS MP ON MPE.meal_plan_id = MP.meal_plan_id
+                      WHERE MPE.meal_id = CP.meal_id
+                  ),
+                  CP.add_tag
+              ) AS tag,
         FROM SAVED_MEAL AS SM
         JOIN MEAL AS M ON SM.meal_id = M.meal_id
         JOIN USER AS U ON SM.user_id = U.user_id

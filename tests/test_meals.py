@@ -99,13 +99,14 @@ def test_assign_meal_to_plan_entry(client):
 def test_get_meal_plan_entries_by_day_and_time(client):
     test_client, mock_cursor, _ = client
     mock_cursor.fetchall.return_value = [
-        (1, "Tofu Stir Fry", "Healthy veggie stir fry", 350)
+        (1, "Tofu Stir Fry", "Healthy veggie stir fry", 350, "Tuesday")
     ]
-    url = '/meal-plan-entries?meal_plan_id=1&day_of_week=Tuesday&meal_time=Lunch'
+    url = '/meal-plan-entries?meal_plan_id=1'
     response = test_client.get(url)
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data[0]["meal_name"] == "Tofu Stir Fry"
+    assert data[0]["day_of_week"] == "Tuesday"
 
 def test_get_meal_plans_by_name(client):
     test_client, mock_cursor, _ = client

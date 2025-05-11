@@ -302,7 +302,6 @@ def get_meal_plan_entries():
                 meal_description: "Made with almond flour and flaxseed"
                 meal_calories: 250
                 day_of_week: "Monday"
-                meal_time: "Breakfast"
     """
     meal_plan_id = request.args.get('meal_plan_id')
 
@@ -315,8 +314,7 @@ def get_meal_plan_entries():
         FROM MEAL_PLAN_ENTRY mpe
         JOIN MEAL m ON mpe.meal_id = m.meal_id
         WHERE mpe.meal_plan_id = %s
-        ORDER BY FIELD(mpe.day_of_week, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'),
-                 FIELD(mpe.meal_time, 'Breakfast', 'Lunch', 'Dinner')
+        ORDER BY FIELD(mpe.day_of_week, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
     """, (meal_plan_id,))
     
     entries = cursor.fetchall()
@@ -328,8 +326,7 @@ def get_meal_plan_entries():
             'meal_name': entry[1],
             'meal_description': entry[2],
             'meal_calories': entry[3],
-            'day_of_week': entry[4],
-            'meal_time': entry[5]
+            'day_of_week': entry[4]
         } for entry in entries
     ]), 200
 
@@ -504,7 +501,7 @@ def get_saved_meal_plan(user_id):
         print("Error retrieving saved meal plans:", str(e))
         return jsonify({'error': 'Internal server error'}), 500
     
-  # grab all of the meal plans made by the patient + the meal plans assigned to them
+# grab all of the meal plans made by the patient + the meal plans assigned to them
 @meal_bp.route('/get-saved-meal-plans/<int:patient_id>', methods=['GET'])
 def get_patient_meal_plans(patient_id):
     """
@@ -530,6 +527,8 @@ def get_patient_meal_plans(patient_id):
               items:
                 type: object
                 properties:
+                  meal_plan_id:
+                    type: integer
                   title:
                     type: string
                   tag:
@@ -537,10 +536,12 @@ def get_patient_meal_plans(patient_id):
                   made_by:
                     type: string
             example:
-              - title: "Keto Kickstart"
+              - meal_plan_id: 1
+                title: "Keto Kickstart"
                 tag: "Keto"
                 made_by: "Dr. Alex Kim"
-              - title: "Plant Power"
+              - meal_plan_id: 2
+                title: "Plant Power"
                 tag: "Vegan"
                 made_by: "Jamie Rivera"
       404:
@@ -559,6 +560,7 @@ def get_patient_meal_plans(patient_id):
     # Step 2: query meal plans (created or assigned)
     query = """
     SELECT DISTINCT
+        mp.meal_plan_id,
         mp.meal_plan_title AS title,
         mp.meal_plan_name AS tag,
         mp.created_at,
@@ -582,3 +584,4 @@ def get_patient_meal_plans(patient_id):
     cursor.close()
 
     return jsonify(meal_plans), 200
+

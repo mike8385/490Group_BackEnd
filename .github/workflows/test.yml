@@ -31,12 +31,22 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run tests with coverage
-        run: |
-          pytest --cov=./ --cov-report=term-missing
-          continue-on-error: true
+        run: pytest --cov=./ --cov-report=term-missing
+        continue-on-error: true
+
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: .coverage
+          
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    if: ${{ github.ref == 'refs/heads/deploy' && success() }}
+    steps:
+      - name: Trigger Render Deploy via API
+        run: |
+          curl -X POST https://api.render.com/deploy/srv-${{ secrets.RENDER_SERVICE_ID }} \
+          -H 'Authorization: Bearer ${{ secrets.RENDER_API_KEY }}'

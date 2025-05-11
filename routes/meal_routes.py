@@ -275,12 +275,12 @@ def assign_meal_to_plan_entry():
     finally:
         cursor.close()
 
-# grabs each meal plan entry based on the time of the day and day of the week
-# ex: /meal-plan-entries?meal_plan_id=1&day_of_week=Tuesday&meal_time=Breakfast
+# grabs each meal plan entry based on day of the week
+# ex: /meal-plan-entries?meal_plan_id=1&day_of_week=Tuesday
 @meal_bp.route('/meal-plan-entries', methods=['GET'])
-def get_meal_plan_entries_by_day_and_time():
+def get_meal_plan_entries():
     """
-    Get meals assigned to a meal plan by day and time
+    Get all meals assigned to a meal plan, grouped by day of the week
 
     ---
     tags:
@@ -290,16 +290,7 @@ def get_meal_plan_entries_by_day_and_time():
         in: query
         type: integer
         required: true
-      - name: day_of_week
-        in: query
-        type: string
-        enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
-        required: true
-      - name: meal_time
-        in: query
-        type: string
-        enum: [Breakfast, Lunch, Dinner]
-        required: true
+        description: ID of the meal plan to retrieve entries for
     responses:
       200:
         description: Meals retrieved successfully
@@ -310,18 +301,23 @@ def get_meal_plan_entries_by_day_and_time():
                 meal_name: "Vegan Pancakes"
                 meal_description: "Made with almond flour and flaxseed"
                 meal_calories: 250
+                day_of_week: "Monday"
+                meal_time: "Breakfast"
     """
     meal_plan_id = request.args.get('meal_plan_id')
-    day_of_week = request.args.get('day_of_week')
-    meal_time = request.args.get('meal_time')
+
+    if not meal_plan_id:
+        return jsonify({"error": "meal_plan_id is required"}), 400
 
     cursor = mysql.connection.cursor()
     cursor.execute("""
-        SELECT mpe.entry_id, m.meal_name, m.meal_description, m.meal_calories
+        SELECT mpe.entry_id, m.meal_name, m.meal_description, m.meal_calories, mpe.day_of_week, mpe.meal_time
         FROM MEAL_PLAN_ENTRY mpe
         JOIN MEAL m ON mpe.meal_id = m.meal_id
-        WHERE mpe.meal_plan_id = %s AND mpe.day_of_week = %s AND mpe.meal_time = %s
-    """, (meal_plan_id, day_of_week, meal_time))
+        WHERE mpe.meal_plan_id = %s
+        ORDER BY FIELD(mpe.day_of_week, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'),
+                 FIELD(mpe.meal_time, 'Breakfast', 'Lunch', 'Dinner')
+    """, (meal_plan_id,))
     
     entries = cursor.fetchall()
     cursor.close()
@@ -331,7 +327,9 @@ def get_meal_plan_entries_by_day_and_time():
             'entry_id': entry[0],
             'meal_name': entry[1],
             'meal_description': entry[2],
-            'meal_calories': entry[3]
+            'meal_calories': entry[3],
+            'day_of_week': entry[4],
+            'meal_time': entry[5]
         } for entry in entries
     ]), 200
 
@@ -386,37 +384,6 @@ def get_meal_plans_by_name():
 # [] add a meal to saved meal plans for specific patient/doctor id
 @meal_bp.route('/saved-meal-plans', methods=['POST'])
 def save_a_meal_plan():
-    """
-    Assign a meal to a specific day and time in a meal plan
-
-    ---
-    tags:
-      - Meal Plan
-    requestBody:
-      required: true
-      content:
-        application/json:
-          schema:
-            type: object
-            required: [meal_plan_id]
-            properties:
-              meal_plan_id:
-                type: integer
-              doctor_id:
-                type: integer
-              patient_id:
-                type: integer
-          example:
-            meal_plan_id: 2
-            patient_id: 4
-    responses:
-      201:
-        description: Meal saved successfully
-      400:
-        description: Error
-      404:
-        description: User not found
-    """
     data = request.get_json()
     meal_plan_id = data.get('meal_plan_id')
     doctor_id = data.get('doctor_id')
@@ -536,3 +503,82 @@ def get_saved_meal_plan(user_id):
     except Exception as e:
         print("Error retrieving saved meal plans:", str(e))
         return jsonify({'error': 'Internal server error'}), 500
+    
+  # grab all of the meal plans made by the patient + the meal plans assigned to them
+@meal_bp.route('/get-saved-meal-plans/<int:patient_id>', methods=['GET'])
+def get_patient_meal_plans(patient_id):
+    """
+    Get all meal plans made by or assigned to a patient.
+
+    ---
+    tags:
+      - Meal Plan
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The patient ID to retrieve meal plans for
+    responses:
+      200:
+        description: List of relevant meal plans
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  title:
+                    type: string
+                  tag:
+                    type: string
+                  made_by:
+                    type: string
+            example:
+              - title: "Keto Kickstart"
+                tag: "Keto"
+                made_by: "Dr. Alex Kim"
+              - title: "Plant Power"
+                tag: "Vegan"
+                made_by: "Jamie Rivera"
+      404:
+        description: Patient not found
+    """
+    cursor = mysql.connection.cursor(DictCursor)
+
+    # Step 1: get user_id of the patient
+    cursor.execute("SELECT user_id FROM USER WHERE patient_id = %s", (patient_id,))
+    result = cursor.fetchone()
+    if not result:
+        return jsonify({"error": "Patient not found"}), 404
+
+    user_id = result['user_id']
+
+    # Step 2: query meal plans (created or assigned)
+    query = """
+    SELECT DISTINCT
+        mp.meal_plan_title AS title,
+        mp.meal_plan_name AS tag,
+        mp.created_at,
+        CASE
+            WHEN d.first_name IS NOT NULL THEN CONCAT('Dr. ', d.first_name, ' ', d.last_name)
+            ELSE CONCAT(p.first_name, ' ', p.last_name)
+        END AS made_by
+    FROM MEAL_PLAN mp
+    JOIN USER u ON mp.made_by = u.user_id
+    LEFT JOIN DOCTOR d ON u.doctor_id = d.doctor_id
+    LEFT JOIN PATIENT p ON u.patient_id = p.patient_id
+    WHERE mp.made_by = %s
+       OR mp.meal_plan_id IN (
+            SELECT meal_plan_id FROM PATIENT_PLANS WHERE user_id = %s
+       )
+    ORDER BY mp.created_at DESC;
+    """
+
+    cursor.execute(query, (user_id, user_id))
+    meal_plans = cursor.fetchall()
+    cursor.close()
+
+    return jsonify(meal_plans), 200

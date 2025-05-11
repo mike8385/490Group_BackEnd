@@ -48,4 +48,4 @@ jobs:
     steps:
       - name: Trigger Render Deploy via API
         run: |
-          curl -X GET "https://api.render.com/deploy/srv-${{ secrets.RENDER_SERVICE_ID }}?key=${{ secrets.RENDER_DEPLOY_KEY }}"
+          curl -X GET "https://api.render.com/deploy/srv-${{ secrets.RENDER_SERVICE_ID }}?key=${{ secrets.RENDER_API_KEY }}"

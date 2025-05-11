@@ -504,7 +504,7 @@ def get_saved_meal_plan(user_id):
         print("Error retrieving saved meal plans:", str(e))
         return jsonify({'error': 'Internal server error'}), 500
     
-  # grab all of the meal plans made by the patient + the meal plans assigned to them
+# grab all of the meal plans made by the patient + the meal plans assigned to them
 @meal_bp.route('/get-saved-meal-plans/<int:patient_id>', methods=['GET'])
 def get_patient_meal_plans(patient_id):
     """
@@ -587,3 +587,4 @@ def get_patient_meal_plans(patient_id):
     cursor.close()
 
     return jsonify(meal_plans), 200
+

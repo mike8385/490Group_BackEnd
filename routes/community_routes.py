@@ -833,7 +833,7 @@ def get_saved(user_id):
     return jsonify(result), 200
 
 # if post is saved
-@comm_bp.route('/posts/is_saved', methods=['POST'])
+@comm_bp.route('/posts/is-saved', methods=['POST'])
 def is_saved():
     """
     Check if a post is saved by a user

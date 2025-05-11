@@ -805,7 +805,7 @@ def get_saved(user_id):
                       WHERE MPE.meal_id = CP.meal_id
                   ),
                   CP.add_tag
-              ) AS tag,
+              ) AS tag
         FROM SAVED_MEAL AS SM
         JOIN MEAL AS M ON SM.meal_id = M.meal_id
         JOIN USER AS U ON SM.user_id = U.user_id

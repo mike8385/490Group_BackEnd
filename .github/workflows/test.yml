@@ -34,6 +34,7 @@ jobs:
         run: pytest --cov=./ --cov-report=term-missing
 
 
+
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
@@ -47,7 +48,5 @@ jobs:
     steps:
       - name: Trigger Render Deploy via API
         run: |
-          curl -X POST https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys \
-            -H 'Accept: application/json' \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-            -d '{}
+          curl -X POST https://api.render.com/deploy/srv-${{ secrets.RENDER_SERVICE_ID }} \
+          -H 'Authorization: Bearer ${{ secrets.RENDER_API_KEY }}'

@@ -805,7 +805,7 @@ def get_saved(user_id):
                       WHERE MPE.meal_id = CP.meal_id
                   ),
                   CP.add_tag
-              ) AS tag,
+              ) AS tag
         FROM SAVED_MEAL AS SM
         JOIN MEAL AS M ON SM.meal_id = M.meal_id
         JOIN USER AS U ON SM.user_id = U.user_id
@@ -849,6 +849,27 @@ def is_saved():
         """, (user_id, post_id))
         result = cursor.fetchone()
         return jsonify({"is_saved": result is not None}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()
+
+@comm_bp.route('/posts/is-liked', methods=['POST'])
+def is_liked():
+    """
+    Check if a post is saved by a user
+    """
+    data = request.get_json()
+    user_id = data.get('user_id')
+    post_id = data.get('post_id')
+
+    cursor = mysql.connection.cursor()
+    try:
+        cursor.execute("""
+            SELECT 1 FROM LIKED_POSTS WHERE user_id = %s AND post_id = %s
+        """, (user_id, post_id))
+        result = cursor.fetchone()
+        return jsonify({"is_liked": result is not None}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
     finally:

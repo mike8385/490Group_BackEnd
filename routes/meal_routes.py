@@ -530,6 +530,8 @@ def get_patient_meal_plans(patient_id):
               items:
                 type: object
                 properties:
+                  meal_plan_id:
+                    type: integer
                   title:
                     type: string
                   tag:
@@ -537,10 +539,12 @@ def get_patient_meal_plans(patient_id):
                   made_by:
                     type: string
             example:
-              - title: "Keto Kickstart"
+              - meal_plan_id: 1
+                title: "Keto Kickstart"
                 tag: "Keto"
                 made_by: "Dr. Alex Kim"
-              - title: "Plant Power"
+              - meal_plan_id: 2
+                title: "Plant Power"
                 tag: "Vegan"
                 made_by: "Jamie Rivera"
       404:
@@ -559,6 +563,7 @@ def get_patient_meal_plans(patient_id):
     # Step 2: query meal plans (created or assigned)
     query = """
     SELECT DISTINCT
+        mp.meal_plan_id,
         mp.meal_plan_title AS title,
         mp.meal_plan_name AS tag,
         mp.created_at,

@@ -386,37 +386,6 @@ def get_meal_plans_by_name():
 # [] add a meal to saved meal plans for specific patient/doctor id
 @meal_bp.route('/saved-meal-plans', methods=['POST'])
 def save_a_meal_plan():
-    """
-    Assign a meal to a specific day and time in a meal plan
-
-    ---
-    tags:
-      - Meal Plan
-    requestBody:
-      required: true
-      content:
-        application/json:
-          schema:
-            type: object
-            required: [meal_plan_id]
-            properties:
-              meal_plan_id:
-                type: integer
-              doctor_id:
-                type: integer
-              patient_id:
-                type: integer
-          example:
-            meal_plan_id: 2
-            patient_id: 4
-    responses:
-      201:
-        description: Meal saved successfully
-      400:
-        description: Error
-      404:
-        description: User not found
-    """
     data = request.get_json()
     meal_plan_id = data.get('meal_plan_id')
     doctor_id = data.get('doctor_id')
@@ -536,3 +505,88 @@ def get_saved_meal_plan(user_id):
     except Exception as e:
         print("Error retrieving saved meal plans:", str(e))
         return jsonify({'error': 'Internal server error'}), 500
+    
+  # grab all of the meal plans made by the patient + the meal plans assigned to them
+@meal_bp.route('/get-saved-meal-plans/<int:patient_id>', methods=['GET'])
+def get_patient_meal_plans(patient_id):
+    """
+  Get all meal plans made by or assigned to a patient.
+
+  ---
+  tags:
+    - Meal Plan
+  parameters:
+    - name: patient_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: The patient ID to retrieve meal plans for
+  responses:
+    200:
+      description: List of relevant meal plans
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              type: object
+              properties:
+                title:
+                  type: string
+                tag:
+                  type: string
+                made_by:
+                  type: string
+          example:
+            - title: "Keto Kickstart"
+              tag: "Keto"
+              made_by: "Dr. Alex Kim"
+            - title: "Plant Power"
+              tag: "Vegan"
+              made_by: "Jamie Rivera"
+    404:
+      description: Patient not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+          example:
+            error: "Patient not found"
+    """
+    cursor = mysql.connection.cursor(DictCursor)
+
+    # get the user_id of the patient
+    cursor.execute("SELECT user_id FROM USER WHERE patient_id = %s", (patient_id,))
+    result = cursor.fetchone()
+    if not result:
+        return jsonify({"error": "Patient not found"}), 404
+
+    user_id = result['user_id']
+
+    # get all relevant meal plans (made by or assigned to)
+    query = """
+    SELECT DISTINCT
+        mp.meal_plan_title AS title,
+        mp.meal_plan_name AS tag,
+        mp.created_at,
+        COALESCE(CONCAT(d.first_name, ' ', d.last_name), CONCAT(p.first_name, ' ', p.last_name)) AS made_by
+    FROM MEAL_PLAN mp
+    JOIN USER u ON mp.made_by = u.user_id
+    LEFT JOIN DOCTOR d ON u.doctor_id = d.doctor_id
+    LEFT JOIN PATIENT p ON u.patient_id = p.patient_id
+    WHERE mp.made_by = %s
+      OR mp.meal_plan_id IN (
+            SELECT meal_plan_id FROM PATIENT_PLANS WHERE user_id = %s
+      )
+    ORDER BY mp.created_at DESC;
+    """
+
+    cursor.execute(query, (user_id, user_id))
+    meal_plans = cursor.fetchall()
+
+    cursor.close()
+    return jsonify(meal_plans)

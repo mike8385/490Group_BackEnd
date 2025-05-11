@@ -809,6 +809,7 @@ def get_saved(user_id):
         FROM SAVED_MEAL AS SM
         JOIN MEAL AS M ON SM.meal_id = M.meal_id
         JOIN USER AS U ON SM.user_id = U.user_id
+        JOIN COMMUNITY_POST AS CP ON SM.post_id = CP.post_id
         LEFT JOIN PATIENT AS P ON U.patient_id = P.patient_id
         LEFT JOIN DOCTOR AS D ON U.doctor_id = D.doctor_id
         WHERE SM.user_id = %s

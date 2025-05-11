@@ -854,6 +854,27 @@ def is_saved():
     finally:
         cursor.close()
 
+@comm_bp.route('/posts/is-liked', methods=['POST'])
+def is_liked():
+    """
+    Check if a post is saved by a user
+    """
+    data = request.get_json()
+    user_id = data.get('user_id')
+    post_id = data.get('post_id')
+
+    cursor = mysql.connection.cursor()
+    try:
+        cursor.execute("""
+            SELECT 1 FROM LIKED_POSTS WHERE user_id = %s AND post_id = %s
+        """, (user_id, post_id))
+        result = cursor.fetchone()
+        return jsonify({"is_liked": result is not None}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        cursor.close()
+
 @comm_bp.route('/posts/unsave', methods=['DELETE'])
 def unsave_post():
     data = request.get_json()

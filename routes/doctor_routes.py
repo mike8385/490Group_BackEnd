@@ -160,9 +160,12 @@ def login_doctor():
     Doctor Login
     ---
     responses:
-      200: Login Successful with the Doctor ID.
-      401: Invalid credentials.
-      404: Doctor not found.
+      200: 
+        description: Login Successful with the Doctor ID.
+      401: 
+        description: Invalid credentials.
+      404: 
+        description: Doctor not found.
     """
     data = request.get_json()
     email = data.get('email')

@@ -302,7 +302,6 @@ def get_meal_plan_entries():
                 meal_description: "Made with almond flour and flaxseed"
                 meal_calories: 250
                 day_of_week: "Monday"
-                meal_time: "Breakfast"
     """
     meal_plan_id = request.args.get('meal_plan_id')
 
@@ -315,8 +314,7 @@ def get_meal_plan_entries():
         FROM MEAL_PLAN_ENTRY mpe
         JOIN MEAL m ON mpe.meal_id = m.meal_id
         WHERE mpe.meal_plan_id = %s
-        ORDER BY FIELD(mpe.day_of_week, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'),
-                 FIELD(mpe.meal_time, 'Breakfast', 'Lunch', 'Dinner')
+        ORDER BY FIELD(mpe.day_of_week, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
     """, (meal_plan_id,))
     
     entries = cursor.fetchall()
@@ -328,8 +326,7 @@ def get_meal_plan_entries():
             'meal_name': entry[1],
             'meal_description': entry[2],
             'meal_calories': entry[3],
-            'day_of_week': entry[4],
-            'meal_time': entry[5]
+            'day_of_week': entry[4]
         } for entry in entries
     ]), 200
 

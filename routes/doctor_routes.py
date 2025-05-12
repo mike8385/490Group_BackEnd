@@ -2,13 +2,17 @@ from flask import Blueprint, request, jsonify
 from rabbitmq_utils import send_medication_request
 from db import mysql
 import bcrypt, base64
-# from google.cloud import storage
+from google.cloud import storage
 import time
+import os
 
 doctor_bp = Blueprint('doctor_bp', __name__)
 
-# GCS_BUCKET = "clinic-db-bucket"
-# storage_client = storage.Client()
+credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
+GCS_BUCKET = "image-bucket-490"
+storage_client = storage.Client()
+
 @doctor_bp.route('/register-doctor', methods=['POST'])
 def register_doctor():
     """
@@ -42,21 +46,20 @@ def register_doctor():
     password = data.get('password')
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
-    # Optional: handle doctor picture later
+    doctor_picture_url = None
     doctor_picture = data.get('doctor_picture')  # Base64 encoded image data
-    # doctor_picture_url = None
-    # if doctor_picture:
-    #     try:
-    #         doctor_picture = base64.b64decode(doctor_picture)
-    #         filename = f"doctors/{data['first_name']}_{int(time.time())}.png"
-    #         bucket = storage_client.bucket(GCS_BUCKET)
-    #         blob = bucket.blob(filename)
-    #         blob.upload_from_string(doctor_picture, content_type='image/png')
-    #         doctor_picture_url = blob.public_url
-    #     except Exception as e:
-    #         return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
+    if doctor_picture:
+        try:
+            doctor_picture = base64.b64decode(doctor_picture)
+            filename = f"doctors/{data['first_name']}_{data['last_name']}_{int(time.time())}.png"
+            bucket = storage_client.bucket(GCS_BUCKET)
+            blob = bucket.blob(filename)
+            blob.upload_from_string(doctor_picture, content_type='image/png')
 
-    # Prepare SQL
+            doctor_picture_url = f"https://storage.googleapis.com/{GCS_BUCKET}/{filename}"
+        except Exception as e:
+            return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
+
     query = """
         INSERT INTO DOCTOR (
             first_name, last_name, email, password, description, license_num,
@@ -83,7 +86,7 @@ def register_doctor():
         data['zipcode'],
         data['city'],
         data['state'],
-        doctor_picture  # or doctor_picture_url if using GCS
+        doctor_picture_url  # or doctor_picture_url if using GCS
     )
 
     try:
@@ -122,12 +125,6 @@ def get_doctor(doctor_id):
     doctor = cursor.fetchone()
 
     if doctor:
-        doctor_picture = doctor[18]  # Adjusted index due to added fields
-        if doctor_picture:
-            if isinstance(doctor_picture, str):
-                doctor_picture = doctor_picture.encode('utf-8')
-            doctor_picture = base64.b64encode(doctor_picture).decode('utf-8')
-
         return jsonify({
             "doctor_id": doctor[0],
             "first_name": doctor[1],
@@ -147,7 +144,7 @@ def get_doctor(doctor_id):
             "zipcode": doctor[15],
             "city": doctor[16],
             "state": doctor[17],
-            "doctor_picture": doctor_picture,
+            "doctor_picture": doctor[18],
             "accepting_patients": doctor[19],
             "doctor_rating": doctor[20],
         }), 200
@@ -253,11 +250,11 @@ def get_all_doctors():
 
     result = []
     for doc in doctors:
-        doctor_picture = doc[18]  # Corrected index due to password removal
-        if doctor_picture:
-            if isinstance(doctor_picture, str):
-                doctor_picture = doctor_picture.encode('utf-8')
-            doctor_picture = base64.b64encode(doctor_picture).decode('utf-8')
+        # doctor_picture = doc[18]  # Corrected index due to password removal
+        # if doctor_picture:
+        #     if isinstance(doctor_picture, str):
+        #         doctor_picture = doctor_picture.encode('utf-8')
+        #     doctor_picture = base64.b64encode(doctor_picture).decode('utf-8')
 
         result.append({
             "doctor_id": doc[0],
@@ -278,7 +275,7 @@ def get_all_doctors():
             "zipcode": doc[15],
             "city": doc[16],
             "state": doc[17],
-            "doctor_picture": doctor_picture,
+            "doctor_picture": doc[18],
             "accepting_patients": doc[19],
             "doctor_rating": doc[20],
             # created_at and updated_at are fetched but not returned
@@ -585,12 +582,6 @@ def get_patients_by_doctor(doctor_id):
 
     result = []
     for pat in patients:
-        profile_pic = pat[8]
-        if profile_pic:
-            if isinstance(profile_pic, str):
-                profile_pic = profile_pic.encode('utf-8')
-            profile_pic = base64.b64encode(profile_pic).decode('utf-8')
-
         result.append({
             "patient_id": pat[0],
             "doctor_id": pat[1],
@@ -600,7 +591,7 @@ def get_patients_by_doctor(doctor_id):
             "last_name": pat[5],
             "medical_conditions": pat[6],
             "pharmacy_id": pat[7],
-            "profile_pic": profile_pic,
+            "profile_pic": pat[8],
             "past_procedures": pat[9],
             "blood_type": pat[10],
             "health_goals": pat[11],
@@ -804,6 +795,20 @@ def edit_doctor():
     city = data.get('city')
     state = data.get('state')
 
+    doctor_picture_url = None
+    doctor_picture = data.get('doctor_picture')  # Base64 encoded image data
+    if doctor_picture:
+        try:
+            doctor_picture = base64.b64decode(doctor_picture)
+            filename = f"doctors/{data['first_name']}_{data['last_name']}_{int(time.time())}.png"
+            bucket = storage_client.bucket(GCS_BUCKET)
+            blob = bucket.blob(filename)
+            blob.upload_from_string(doctor_picture, content_type='image/png')
+
+            doctor_picture_url = f"https://storage.googleapis.com/{GCS_BUCKET}/{filename}"
+        except Exception as e:
+            return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
+
     cursor = mysql.connection.cursor()
     try:
         cursor.execute("""
@@ -821,12 +826,13 @@ def edit_doctor():
                 zipcode = %s,
                 city = %s,
                 state = %s,
+                doctor_picture = %s,
                 updated_at = NOW()
             WHERE doctor_id = %s
         """, (
             first_name, last_name, email, description,
             years_of_practice, specialty, payment_fee, gender,
-            phone_number, address, zipcode, city, state, doctor_id
+            phone_number, address, zipcode, city, state, doctor_picture_url, doctor_id
         ))
 
         mysql.connection.commit()

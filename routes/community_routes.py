@@ -1,8 +1,16 @@
 from flask import Blueprint, request, jsonify
 from db import mysql
 import bcrypt, base64
+import os
+from google.cloud import storage
+import time
 
 comm_bp = Blueprint('comm_bp', __name__)
+
+credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
+GCS_BUCKET = "image-bucket-490"
+storage_client = storage.Client()
 
 # get a post by post_id
 @comm_bp.route('/posts/<int:post_id>', methods=['GET'])
@@ -268,9 +276,22 @@ def add_post():
     meal_name = data.get('meal_name')
     meal_calories = data.get('meal_calories')
     description = data.get('description')
-    picture = data.get('picture')
+    # picture = data.get('picture')
     add_tag = data.get('add_tag')
 
+    meal_picture_url = None
+    picture = data.get('picture')  # Base64 encoded image data
+    if picture:
+        try:
+            picture = base64.b64decode(picture)
+            filename = f"meals/{data['meal_name']}_{data['user_id']}_{int(time.time())}.png"
+            bucket = storage_client.bucket(GCS_BUCKET)
+            blob = bucket.blob(filename)
+            blob.upload_from_string(picture, content_type='image/png')
+
+            meal_picture_url = f"https://storage.googleapis.com/{GCS_BUCKET}/{filename}"
+        except Exception as e:
+            return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
     cursor = mysql.connection.cursor()
 
     try:
@@ -284,7 +305,7 @@ def add_post():
         cursor.execute("""
             INSERT INTO COMMUNITY_POST (meal_id, user_id, description, picture, add_tag)
             VALUES (%s, %s, %s, %s, %s)
-        """, (meal_id, user_id, description, picture, add_tag))
+        """, (meal_id, user_id, description, meal_picture_url, add_tag))
 
         mysql.connection.commit()
 
@@ -295,7 +316,7 @@ def add_post():
             "meal_name": meal_name,
             "meal_calories": meal_calories,
             "description": description,
-            "picture": picture,
+            "picture": meal_picture_url,
             "add_tag": add_tag
         }), 201
 
@@ -677,7 +698,8 @@ def get_comments(post_id):
     query = """
         SELECT PC.comment_id, PC.post_id, PC.user_id, PC.comment_text, PC.created_at,
           COALESCE(P.first_name, D.first_name) AS first_name,
-          COALESCE(P.last_name, D.last_name) AS last_name
+          COALESCE(P.last_name, D.last_name) AS last_name,
+          U.doctor_id, U.patient_id
         FROM POST_COMMENTS AS PC
         JOIN USER AS U ON PC.user_id = U.user_id
         LEFT JOIN PATIENT AS P ON U.patient_id = P.patient_id
@@ -697,7 +719,9 @@ def get_comments(post_id):
             "comment_text": comment[3],
             "created_at": comment[4],
             "first_name": comment[5],
-            "last_name": comment[6]
+            "last_name": comment[6],
+            "doctor_id": comment[7],
+            "patient_id": comment[8]
         })
     return jsonify(result), 200
 

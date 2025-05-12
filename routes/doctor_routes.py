@@ -18,11 +18,98 @@ def register_doctor():
     """
     Register a new doctor
     ---
+    tags:
+      - Doctor
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - first_name
+              - last_name
+              - email
+              - password
+              - license_num
+              - license_exp_date
+              - dob
+              - med_school
+              - years_of_practice
+              - specialty
+              - payment_fee
+              - gender
+              - phone_number
+              - address
+              - zipcode
+              - city
+              - state
+            properties:
+              first_name:
+                type: string
+              last_name:
+                type: string
+              email:
+                type: string
+              password:
+                type: string
+              description:
+                type: string
+              license_num:
+                type: string
+              license_exp_date:
+                type: string
+                format: date
+              dob:
+                type: string
+                format: date
+              med_school:
+                type: string
+              years_of_practice:
+                type: integer
+              specialty:
+                type: string
+              payment_fee:
+                type: number
+              gender:
+                type: string
+              phone_number:
+                type: string
+              address:
+                type: string
+              zipcode:
+                type: string
+              city:
+                type: string
+              state:
+                type: string
+              doctor_picture:
+                type: string
+                description: Base64 encoded image string
+          example:
+            first_name: "Jane"
+            last_name: "Smith"
+            email: "jane.smith@example.com"
+            password: "securepass123"
+            license_num: "LIC2024123"
+            license_exp_date: "2026-01-01"
+            dob: "1982-05-12"
+            med_school: "Stanford School of Medicine"
+            years_of_practice: 12
+            specialty: "Pediatrics"
+            payment_fee: 120.0
+            gender: "Female"
+            phone_number: "555-123-4567"
+            address: "123 Wellness Way"
+            zipcode: "94043"
+            city: "Mountain View"
+            state: "CA"
+            doctor_picture: "<base64 string>"
     responses:
       201:
         description: Doctor registered successfully!
       400:
-        description: Validation error
+        description: Validation error or image upload failure
       500:
         description: Server/database error
     """
@@ -156,12 +243,29 @@ def login_doctor():
     """
     Doctor Login
     ---
+    tags:
+    - Doctor
+    requestBody:
+    required: true
+    content:
+        application/json:
+        schema:
+            type: object
+            required:
+            - email
+            - password
+            properties:
+            email: { type: string }
+            password: { type: string }
+        example:
+            email: "alice@example.com"
+            password: "password123"
     responses:
-      200: 
+    200:
         description: Login Successful with the Doctor ID.
-      401: 
+    401:
         description: Invalid credentials.
-      404: 
+    404:
         description: Doctor not found.
     """
     data = request.get_json()
@@ -850,7 +954,6 @@ def edit_doctor():
 def get_top_doctors():
     """
     Get the top 3 rated doctors
-
     ---
     tags:
       - Doctor
@@ -883,7 +986,3 @@ def get_top_doctors():
         return jsonify({"error": str(e)}), 400
     finally:
         cursor.close()
-
-
-
-

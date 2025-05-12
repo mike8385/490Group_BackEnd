@@ -839,8 +839,8 @@ def get_saved(user_id):
       400:
         description: Failed to fetch saved posts
     """
+    cursor = mysql.connection.cursor()
     try:
-      cursor = mysql.connection.cursor()
       query = """
           SELECT SM.saved_meal_id, SM.user_id, SM.meal_id, SM.post_id,
                 M.meal_name, M.meal_calories,

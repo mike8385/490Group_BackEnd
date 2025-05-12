@@ -570,7 +570,7 @@ def remove_patient_doctor(patient_id):
 # ------------------ LOGIN ENDPOINTS ---------------------------------------
 
 #login patient with pw
-'''
+
 @patient_bp.route('/login-patient', methods=['POST'])
 def login_patient():
     """
@@ -663,13 +663,13 @@ def login_patient():
             return jsonify({"error": "Patient not found"}), 404
     finally:
         cursor.close()
-'''
 
+'''
 #login patient w/o pw
 @patient_bp.route('/login-patient', methods=['POST'])
 def login_patient():
     """
-    Login a patient using email
+    Login a patient using email for testing purposes
 
     ---
     tags:
@@ -718,7 +718,7 @@ def login_patient():
         return jsonify({"message": "Login successful", "patient_id": patient[0]}), 200
     else:
         return jsonify({"error": "Patient not found"}), 404
-
+'''
 #---------------------------- DAILY + WEEKLY SURVEY END POINTS ------------------------------------
 
 # add to daily survey

@@ -68,18 +68,18 @@ def get_posts(post_id):
 
     mysql.connection.commit()
 
-    post_picture = post[4]
-    if post_picture:
-        if isinstance(post_picture, str):
-            post_picture = post_picture.encode('utf-8')
-        post_picture = base64.b64encode(post_picture).decode('utf-8')
+    # post_picture = post[4]
+    # if post_picture:
+    #     if isinstance(post_picture, str):
+    #         post_picture = post_picture.encode('utf-8')
+    #     post_picture = base64.b64encode(post_picture).decode('utf-8')
 
     result = {
         "post_id": post[0],
         "meal_id": post[1],
         "user_id": post[2],
         "description": post[3],
-        "picture": post_picture,
+        "picture": post[4],
         "created_at": post[5],
         "meal_name": post[6],
         "meal_calories": post[7],
@@ -141,18 +141,18 @@ def get_posts_by_user(user_id):
 
     result = []
     for post in posts:
-        post_picture = post[4]
-        if post_picture:
-            if isinstance(post_picture, str):
-                post_picture = post_picture.encode('utf-8')
-            post_picture = base64.b64encode(post_picture).decode('utf-8')
+        # post_picture = post[4]
+        # if post_picture:
+        #     if isinstance(post_picture, str):
+        #         post_picture = post_picture.encode('utf-8')
+        #     post_picture = base64.b64encode(post_picture).decode('utf-8')
 
         result.append({
             "post_id": post[0],
             "meal_id": post[1],
             "user_id": post[2],
             "description": post[3],
-            "picture": post_picture,
+            "picture": post[4],
             "created_at": post[5],
             "meal_name": post[6],
             "meal_calories": post[7],
@@ -210,18 +210,18 @@ def get_all_posts():
 
     result = []
     for post in posts:
-        post_picture = post[4]
-        if post_picture:
-            if isinstance(post_picture, str):
-                post_picture = post_picture.encode('utf-8')
-            post_picture = base64.b64encode(post_picture).decode('utf-8')
+        # post_picture = post[4]
+        # if post_picture:
+        #     if isinstance(post_picture, str):
+        #         post_picture = post_picture.encode('utf-8')
+        #     post_picture = base64.b64encode(post_picture).decode('utf-8')
 
         result.append({
             "post_id": post[0],
             "meal_id": post[1],
             "user_id": post[2],
             "description": post[3],
-            "picture": post_picture,
+            "picture": post[4],
             "created_at": post[5],
             "meal_name": post[6],
             "meal_calories": post[7],
@@ -284,7 +284,8 @@ def add_post():
     if picture:
         try:
             picture = base64.b64decode(picture)
-            filename = f"meals/{data['meal_name']}_{data['user_id']}_{int(time.time())}.png"
+            meal_name_formatted = meal_name.replace(" ", "_")
+            filename = f"meals/{meal_name_formatted}_{data['user_id']}_{int(time.time())}.png"
             bucket = storage_client.bucket(GCS_BUCKET)
             blob = bucket.blob(filename)
             blob.upload_from_string(picture, content_type='image/png')

@@ -2,23 +2,114 @@ from flask import Blueprint, request, jsonify
 from rabbitmq_utils import send_medication_request
 from db import mysql
 import bcrypt, base64
-# from google.cloud import storage
+from google.cloud import storage
 import time
+import os
 
 doctor_bp = Blueprint('doctor_bp', __name__)
 
-# GCS_BUCKET = "clinic-db-bucket"
-# storage_client = storage.Client()
+credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
+GCS_BUCKET = "image-bucket-490"
+storage_client = storage.Client()
+
 @doctor_bp.route('/register-doctor', methods=['POST'])
 def register_doctor():
     """
     Register a new doctor
     ---
+    tags:
+      - Doctor
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - first_name
+              - last_name
+              - email
+              - password
+              - license_num
+              - license_exp_date
+              - dob
+              - med_school
+              - years_of_practice
+              - specialty
+              - payment_fee
+              - gender
+              - phone_number
+              - address
+              - zipcode
+              - city
+              - state
+            properties:
+              first_name:
+                type: string
+              last_name:
+                type: string
+              email:
+                type: string
+              password:
+                type: string
+              description:
+                type: string
+              license_num:
+                type: string
+              license_exp_date:
+                type: string
+                format: date
+              dob:
+                type: string
+                format: date
+              med_school:
+                type: string
+              years_of_practice:
+                type: integer
+              specialty:
+                type: string
+              payment_fee:
+                type: number
+              gender:
+                type: string
+              phone_number:
+                type: string
+              address:
+                type: string
+              zipcode:
+                type: string
+              city:
+                type: string
+              state:
+                type: string
+              doctor_picture:
+                type: string
+                description: Base64 encoded image string
+          example:
+            first_name: "Jane"
+            last_name: "Smith"
+            email: "jane.smith@example.com"
+            password: "securepass123"
+            license_num: "LIC2024123"
+            license_exp_date: "2026-01-01"
+            dob: "1982-05-12"
+            med_school: "Stanford School of Medicine"
+            years_of_practice: 12
+            specialty: "Pediatrics"
+            payment_fee: 120.0
+            gender: "Female"
+            phone_number: "555-123-4567"
+            address: "123 Wellness Way"
+            zipcode: "94043"
+            city: "Mountain View"
+            state: "CA"
+            doctor_picture: "<base64 string>"
     responses:
       201:
         description: Doctor registered successfully!
       400:
-        description: Validation error
+        description: Validation error or image upload failure
       500:
         description: Server/database error
     """
@@ -42,21 +133,20 @@ def register_doctor():
     password = data.get('password')
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
-    # Optional: handle doctor picture later
+    doctor_picture_url = None
     doctor_picture = data.get('doctor_picture')  # Base64 encoded image data
-    # doctor_picture_url = None
-    # if doctor_picture:
-    #     try:
-    #         doctor_picture = base64.b64decode(doctor_picture)
-    #         filename = f"doctors/{data['first_name']}_{int(time.time())}.png"
-    #         bucket = storage_client.bucket(GCS_BUCKET)
-    #         blob = bucket.blob(filename)
-    #         blob.upload_from_string(doctor_picture, content_type='image/png')
-    #         doctor_picture_url = blob.public_url
-    #     except Exception as e:
-    #         return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
+    if doctor_picture:
+        try:
+            doctor_picture = base64.b64decode(doctor_picture)
+            filename = f"doctors/{data['first_name']}_{data['last_name']}_{int(time.time())}.png"
+            bucket = storage_client.bucket(GCS_BUCKET)
+            blob = bucket.blob(filename)
+            blob.upload_from_string(doctor_picture, content_type='image/png')
 
-    # Prepare SQL
+            doctor_picture_url = f"https://storage.googleapis.com/{GCS_BUCKET}/{filename}"
+        except Exception as e:
+            return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
+
     query = """
         INSERT INTO DOCTOR (
             first_name, last_name, email, password, description, license_num,
@@ -83,7 +173,7 @@ def register_doctor():
         data['zipcode'],
         data['city'],
         data['state'],
-        doctor_picture  # or doctor_picture_url if using GCS
+        doctor_picture_url  # or doctor_picture_url if using GCS
     )
 
     try:
@@ -98,16 +188,69 @@ def register_doctor():
 @doctor_bp.route('/doctor/<int:doctor_id>', methods=['GET'])
 def get_doctor(doctor_id):
     """
-    Retrieve a doctor's information by their ID number
+    Retrieve a doctor's info by their ID
     ---
+    tags:
+      - Doctor
+    parameters:
+      - name: doctor_id
+        in: path
+        required: true
+        schema:
+          type: integer
     responses:
       200:
-        description: return doctor information including doctor_id, first_name, last_name, email, description, license_num,
-               license_exp_date, dob, med_school, specialty, years_of_practice, payment_fee,
-               gender, phone_number, address, zipcode, city, state, doctor_picture,
-               accepting_patients, doctor_rating
+        description: Doctor information returned successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                doctor_id: { type: integer }
+                first_name: { type: string }
+                last_name: { type: string }
+                email: { type: string }
+                description: { type: string }
+                license_num: { type: string }
+                license_exp_date: { type: string, format: date }
+                dob: { type: string, format: date }
+                med_school: { type: string }
+                specialty: { type: string }
+                years_of_practice: { type: integer }
+                payment_fee: { type: number }
+                gender: { type: string }
+                phone_number: { type: string }
+                address: { type: string }
+                zipcode: { type: string }
+                city: { type: string }
+                state: { type: string }
+                doctor_picture: { type: string }
+                accepting_patients: { type: boolean }
+                doctor_rating: { type: number }
+            example:
+              doctor_id: 1
+              first_name: "Alice"
+              last_name: "Nguyen"
+              email: "alice@example.com"
+              description: "Cardiology specialist"
+              license_num: "MD123"
+              license_exp_date: "2028-12-31"
+              dob: "1980-01-15"
+              med_school: "Harvard"
+              specialty: "Cardiology"
+              years_of_practice: 10
+              payment_fee: 200.0
+              gender: "Female"
+              phone_number: "1234567890"
+              address: "123 Lane"
+              zipcode: "10001"
+              city: "New York"
+              state: "NY"
+              doctor_picture: "https://storage.googleapis.com/doctor/doctor1.png"
+              accepting_patients: true
+              doctor_rating: 4.9
       404:
-        description: Doctor not found.
+        description: Doctor not found
     """
     cursor = mysql.connection.cursor()
     query = """
@@ -122,12 +265,6 @@ def get_doctor(doctor_id):
     doctor = cursor.fetchone()
 
     if doctor:
-        doctor_picture = doctor[18]  # Adjusted index due to added fields
-        if doctor_picture:
-            if isinstance(doctor_picture, str):
-                doctor_picture = doctor_picture.encode('utf-8')
-            doctor_picture = base64.b64encode(doctor_picture).decode('utf-8')
-
         return jsonify({
             "doctor_id": doctor[0],
             "first_name": doctor[1],
@@ -147,7 +284,7 @@ def get_doctor(doctor_id):
             "zipcode": doctor[15],
             "city": doctor[16],
             "state": doctor[17],
-            "doctor_picture": doctor_picture,
+            "doctor_picture": doctor[18],
             "accepting_patients": doctor[19],
             "doctor_rating": doctor[20],
         }), 200
@@ -159,12 +296,29 @@ def login_doctor():
     """
     Doctor Login
     ---
+    tags:
+    - Doctor
+    requestBody:
+    required: true
+    content:
+        application/json:
+        schema:
+            type: object
+            required:
+            - email
+            - password
+            properties:
+            email: { type: string }
+            password: { type: string }
+        example:
+            email: "alice@example.com"
+            password: "password123"
     responses:
-      200: 
+    200:
         description: Login Successful with the Doctor ID.
-      401: 
+    401:
         description: Invalid credentials.
-      404: 
+    404:
         description: Doctor not found.
     """
     data = request.get_json()
@@ -208,13 +362,39 @@ def login_doctor():
 @doctor_bp.route('/doctor/<int:doctor_id>', methods=['DELETE'])
 def delete_doctor(doctor_id):
     """
-    Delete Doctor by their ID number
+    Delete a doctor by their ID number
     ---
+    tags:
+      - Doctor
+    parameters:
+      - name: doctor_id
+        in: path
+        required: true
+        schema:
+          type: integer
     responses:
       200:
-        description: Doctor with denoted ID has been deleted.
+        description: Doctor deleted successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+            example:
+              message: "Doctor with ID 1 has been deleted."
       404:
-        description: Doctor not found.
+        description: Doctor not found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+            example:
+              error: "Doctor not found"
     """
     cursor = mysql.connection.cursor()
 
@@ -236,9 +416,61 @@ def get_all_doctors():
     """
     Retrieve all doctors' information
     ---
+    tags:
+      - Doctor
     responses:
       200:
-        description: All doctors' information is returned.
+        description: List of all registered doctors
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  doctor_id: { type: integer }
+                  first_name: { type: string }
+                  last_name: { type: string }
+                  email: { type: string }
+                  description: { type: string }
+                  license_num: { type: string }
+                  license_exp_date: { type: string, format: date }
+                  dob: { type: string, format: date }
+                  med_school: { type: string }
+                  specialty: { type: string }
+                  years_of_practice: { type: integer }
+                  payment_fee: { type: number }
+                  gender: { type: string }
+                  phone_number: { type: string }
+                  address: { type: string }
+                  zipcode: { type: string }
+                  city: { type: string }
+                  state: { type: string }
+                  doctor_picture: { type: string }
+                  accepting_patients: { type: boolean }
+                  doctor_rating: { type: number }
+            example:
+              - doctor_id: 1
+                first_name: "Alice"
+                last_name: "Nguyen"
+                email: "alice@example.com"
+                description: "Cardiology specialist"
+                license_num: "MD123"
+                license_exp_date: "2028-12-31"
+                dob: "1980-01-15"
+                med_school: "Harvard"
+                specialty: "Cardiology"
+                years_of_practice: 10
+                payment_fee: 200.0
+                gender: "Female"
+                phone_number: "1234567890"
+                address: "123 Lane"
+                zipcode: "10001"
+                city: "New York"
+                state: "NY"
+                doctor_picture: "https://storage.googleapis.com/bucket/doctor1.png"
+                accepting_patients: true
+                doctor_rating: 4.9
     """
     cursor = mysql.connection.cursor()
     query = """
@@ -253,11 +485,11 @@ def get_all_doctors():
 
     result = []
     for doc in doctors:
-        doctor_picture = doc[18]  # Corrected index due to password removal
-        if doctor_picture:
-            if isinstance(doctor_picture, str):
-                doctor_picture = doctor_picture.encode('utf-8')
-            doctor_picture = base64.b64encode(doctor_picture).decode('utf-8')
+        # doctor_picture = doc[18]  # Corrected index due to password removal
+        # if doctor_picture:
+        #     if isinstance(doctor_picture, str):
+        #         doctor_picture = doctor_picture.encode('utf-8')
+        #     doctor_picture = base64.b64encode(doctor_picture).decode('utf-8')
 
         result.append({
             "doctor_id": doc[0],
@@ -278,7 +510,7 @@ def get_all_doctors():
             "zipcode": doc[15],
             "city": doc[16],
             "state": doc[17],
-            "doctor_picture": doctor_picture,
+            "doctor_picture": doc[18],
             "accepting_patients": doc[19],
             "doctor_rating": doc[20],
             # created_at and updated_at are fetched but not returned
@@ -333,13 +565,49 @@ def get_appointments_by_doctor(doctor_id):
 @doctor_bp.route('/doc-appointments-status/<int:appointment_id>', methods=['PATCH'])
 def update_appointment_status(appointment_id):
     """
-    Updates the appointment status: accepts (1) or sets to 2 if denied.
+    Update the acceptance status of an appointment
     ---
+    tags:
+      - Appointment
+    parameters:
+      - name: appointment_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - accepted
+            properties:
+              accepted:
+                type: integer
+                description: 1 to accept, 0 to deny (will be set to 2)
+          example:
+            accepted: 1
     responses:
       200:
-        description: Appointment status updated successfully
+        description: Status update message
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
       400:
-        description: Error message based on what went wrong.
+        description: Invalid input or database error
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
     """
     data = request.get_json()
     new_status = data.get('accepted')
@@ -384,17 +652,51 @@ def update_appointment_status(appointment_id):
 @doctor_bp.route('/prescription/add', methods=['POST'])
 def add_prescription():
     """
-    Prescribe a medicine to a patient with the quantity
+    Prescribe a medicine to a patient
     ---
+    tags:
+      - Prescription
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - patient_id
+              - medicine_id
+              - quantity
+            properties:
+              patient_id:
+                type: integer
+              medicine_id:
+                type: integer
+              quantity:
+                type: integer
+                minimum: 1
+          example:
+            patient_id: 1
+            medicine_id: 3
+            quantity: 2
     responses:
-      200:
-        description: Prescription added successfully.
+      201:
+        description: Prescription added successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
       400:
-        description: patient_id, medicine_id, and quantity are required.
-      400:
-        description: quantity must be a positive integer.
-      400:
-        description: Error message based on what went wrong.
+        description: Validation or database error
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
     """
     data = request.get_json()
     patient_id = data.get('patient_id')
@@ -433,15 +735,58 @@ def add_prescription():
 @doctor_bp.route('/doctor-accepting-status/<int:doctor_id>', methods=['PATCH'])
 def update_accepting_status(doctor_id):
     """
-    Handles if doctor is accepting patients or not.
+    Update whether a doctor is accepting patients
     ---
+    tags:
+      - Doctor
+    parameters:
+      - name: doctor_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - accepting_patients
+            properties:
+              accepting_patients:
+                type: integer
+                description: 1 for accepting, 0 for not accepting
+          example:
+            accepting_patients: 1
     responses:
       200:
-        description: Doctor's accepting status updated successfully.
+        description: Doctor's accepting status updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
       404:
-        description: Doctor not found or no change made.
+        description: Doctor not found or unchanged
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
       400:
-        description: Error message based on what went wrong.
+        description: Invalid input or database error
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
     """
     data = request.get_json()
     new_status = data.get('accepting_patients')
@@ -473,15 +818,56 @@ def update_accepting_status(doctor_id):
 @doctor_bp.route('/appointment/<int:appt_id>/add_note', methods=['PATCH'])
 def add_appointment_note(appt_id):
     """
-    Handles if doctor is accepting patients or not.
+    Add a note to an appointment
     ---
+    tags:
+      - Appointment
+    parameters:
+      - name: appt_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - doctor_appointment_note
+            properties:
+              doctor_appointment_note:
+                type: string
+          example:
+            doctor_appointment_note: "Patient advised to follow up in 2 weeks."
     responses:
       200:
-        description: Doctor's appointment note added successfully, with the appointment id and doctor appointment note.
+        description: Note added successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: { type: string }
+                appt_id: { type: integer }
+                doctor_appointment_note: { type: string }
       404:
         description: Appointment not found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: { type: string }
       400:
-        description: Error message based on what went wrong.
+        description: Invalid input or database error
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: { type: string }
     """
     data = request.get_json()
     note = data.get('doctor_appointment_note')
@@ -517,15 +903,37 @@ def add_appointment_note(appt_id):
 @doctor_bp.route('/doctor/<int:doctor_id>/rating', methods=['GET'])
 def get_doctor_average_rating(doctor_id):
     """
-    Compute the average rating for a doctor based on patient appointments.
+    Get average rating for a doctor based on appointment reviews
     ---
+    tags:
+      - Doctor
+    parameters:
+      - name: doctor_id
+        in: path
+        required: true
+        schema:
+          type: integer
     responses:
       200:
-        description: Average rating retrieved successfully with the doctor_id and average_rating.
-      200:
-        description: This doctor has no ratings yet with the doctor_id and the average_rating as None
+        description: Doctor rating retrieved or no ratings found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: { type: string }
+                doctor_id: { type: integer }
+                average_rating:
+                  type: number
+                  nullable: true
       400:
-        description: Error message based on what went wrong.
+        description: Retrieval error
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: { type: string }
     """
     cursor = mysql.connection.cursor()
 
@@ -560,13 +968,27 @@ def get_doctor_average_rating(doctor_id):
 @doctor_bp.route('/doc_patients/<int:doctor_id>', methods=['GET'])
 def get_patients_by_doctor(doctor_id):
     """
-    Get all patients assigned to a specific doctor
+    Get all patients assigned to a doctor
     ---
+    tags:
+      - Doctor
+    parameters:
+      - name: doctor_id
+        in: path
+        required: true
+        schema:
+          type: integer
     responses:
       200:
-        description: return information about the doctor's patient based on the doctor id and patient id.
+        description: List of patients assigned to the doctor
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
       404:
-        description: Error, no description.
+        description: No patients found for this doctor
     """
     cursor = mysql.connection.cursor()
     query = """
@@ -585,12 +1007,6 @@ def get_patients_by_doctor(doctor_id):
 
     result = []
     for pat in patients:
-        profile_pic = pat[8]
-        if profile_pic:
-            if isinstance(profile_pic, str):
-                profile_pic = profile_pic.encode('utf-8')
-            profile_pic = base64.b64encode(profile_pic).decode('utf-8')
-
         result.append({
             "patient_id": pat[0],
             "doctor_id": pat[1],
@@ -600,7 +1016,7 @@ def get_patients_by_doctor(doctor_id):
             "last_name": pat[5],
             "medical_conditions": pat[6],
             "pharmacy_id": pat[7],
-            "profile_pic": profile_pic,
+            "profile_pic": pat[8],
             "past_procedures": pat[9],
             "blood_type": pat[10],
             "health_goals": pat[11],
@@ -618,13 +1034,33 @@ def get_patients_by_doctor(doctor_id):
 @doctor_bp.route('/doc-past/<int:doctor_id>', methods=['GET'])
 def get_past_appointments_by_doctor(doctor_id):
     """
-    Get past appointments by doctor ID
+    Get past appointments for a doctor
     ---
+    tags:
+      - Appointment
+    parameters:
+      - name: doctor_id
+        in: path
+        required: true
+        schema:
+          type: integer
     responses:
       200:
-        description: return information about the past appointments based on the doctor id and patient id.
+        description: List of past appointments
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
       400:
-        description: Error message based on what went wrong.
+        description: Retrieval error
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: { type: string }
     """
     cursor = mysql.connection.cursor()
 
@@ -661,13 +1097,33 @@ def get_past_appointments_by_doctor(doctor_id):
 @doctor_bp.route('/doc-upcoming/<int:doctor_id>', methods=['GET'])
 def get_upcoming_appointments_by_doctor(doctor_id):
     """
-    Get upcoming appointments by doctor ID
+    Get upcoming accepted appointments for a doctor
     ---
+    tags:
+      - Appointment
+    parameters:
+      - name: doctor_id
+        in: path
+        required: true
+        schema:
+          type: integer
     responses:
       200:
-        description: return information about the upcoming appointments based on the doctor id and patient id.
+        description: List of upcoming accepted appointments
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
       400:
-        description: Error message based on what went wrong.
+        description: Error retrieving appointments
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: { type: string }
     """
     cursor = mysql.connection.cursor()
 
@@ -704,13 +1160,33 @@ def get_upcoming_appointments_by_doctor(doctor_id):
 @doctor_bp.route('/requested-appointments/<int:doctor_id>', methods=['GET'])
 def get_requested_appointments(doctor_id):
     """
-    Get upcoming requested (not yet accepted) appointments by doctor ID
+    Get requested (not yet accepted) upcoming appointments for a doctor
     ---
+    tags:
+      - Appointment
+    parameters:
+      - name: doctor_id
+        in: path
+        required: true
+        schema:
+          type: integer
     responses:
       200:
-        description: Returns upcoming appointments that have not been accepted yet for the specified doctor.
+        description: List of upcoming requested appointments
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
       400:
-        description: Error message based on what went wrong.
+        description: Error retrieving appointments
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: { type: string }
     """
     cursor = mysql.connection.cursor()
 
@@ -751,15 +1227,35 @@ def get_requested_appointments(doctor_id):
 @doctor_bp.route('/request-prescription', methods=['POST'])
 def request_prescription():
     """
-    Prescription request for a patient that goes to the pharmacy
+    Send a prescription request to the pharmacy
     ---
+    tags:
+      - Prescription
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - appt_id
+              - medicine_id
+              - quantity
+            properties:
+              appt_id: { type: integer }
+              medicine_id: { type: integer }
+              quantity: { type: integer }
+          example:
+            appt_id: 7
+            medicine_id: 2
+            quantity: 30
     responses:
       200:
-        description: Prescription request sent successfully.
+        description: Prescription request sent successfully
       400:
         description: Missing required fields
       500:
-        description: Error message based on what went wrong.
+        description: Server error during processing
     """
     data = request.json
     required_fields = ['appt_id', 'medicine_id', 'quantity']
@@ -777,15 +1273,51 @@ def request_prescription():
 @doctor_bp.route('/edit-doctor', methods=['PUT'])
 def edit_doctor():
     """
-    Can edit doctor information.
+    Edit an existing doctor's information
     ---
+    tags:
+      - Doctor
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - doctor_id
+              - first_name
+              - last_name
+              - email
+            properties:
+              doctor_id: { type: integer }
+              first_name: { type: string }
+              last_name: { type: string }
+              email: { type: string }
+              description: { type: string }
+              years_of_practice: { type: integer }
+              specialty: { type: string }
+              payment_fee: { type: number }
+              gender: { type: string }
+              phone_number: { type: string }
+              address: { type: string }
+              zipcode: { type: string }
+              city: { type: string }
+              state: { type: string }
+              doctor_picture: { type: string, description: "Base64-encoded image" }
+          example:
+            doctor_id: 3
+            first_name: "Jane"
+            last_name: "Smith"
+            email: "jane@example.com"
+            gender: "Female"
+            city: "Chicago"
     responses:
       200:
-        description: Doctor information updated successfully.
+        description: Doctor info updated successfully
       400:
-        description: Missing required fields
+        description: Validation or image upload error
       500:
-        description: Error message based on what went wrong.
+        description: Database update error
     """
     data = request.get_json()
     print(data)
@@ -804,6 +1336,20 @@ def edit_doctor():
     city = data.get('city')
     state = data.get('state')
 
+    doctor_picture_url = None
+    doctor_picture = data.get('doctor_picture')  # Base64 encoded image data
+    if doctor_picture:
+        try:
+            doctor_picture = base64.b64decode(doctor_picture)
+            filename = f"doctors/{data['first_name']}_{data['last_name']}_{int(time.time())}.png"
+            bucket = storage_client.bucket(GCS_BUCKET)
+            blob = bucket.blob(filename)
+            blob.upload_from_string(doctor_picture, content_type='image/png')
+
+            doctor_picture_url = f"https://storage.googleapis.com/{GCS_BUCKET}/{filename}"
+        except Exception as e:
+            return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
+
     cursor = mysql.connection.cursor()
     try:
         cursor.execute("""
@@ -821,12 +1367,13 @@ def edit_doctor():
                 zipcode = %s,
                 city = %s,
                 state = %s,
+                doctor_picture = %s,
                 updated_at = NOW()
             WHERE doctor_id = %s
         """, (
             first_name, last_name, email, description,
             years_of_practice, specialty, payment_fee, gender,
-            phone_number, address, zipcode, city, state, doctor_id
+            phone_number, address, zipcode, city, state, doctor_picture_url, doctor_id
         ))
 
         mysql.connection.commit()
@@ -843,18 +1390,23 @@ def edit_doctor():
 @doctor_bp.route('/top-doctors', methods=['GET'])
 def get_top_doctors():
     """
-    Get the top 3 rated doctors
-
+    Retrieve the top 3 highest-rated doctors
     ---
     tags:
       - Doctor
     responses:
       200:
-        description: Successfully retrieved top 3 doctors.
+        description: Top 3 rated doctors returned successfully
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
       400:
-        description: Error occurred.
+        description: Database error
       404:
-        description: Ratings not found.
+        description: No ratings found
     """
     cursor = mysql.connection.cursor()
 
@@ -877,7 +1429,3 @@ def get_top_doctors():
         return jsonify({"error": str(e)}), 400
     finally:
         cursor.close()
-
-
-
-

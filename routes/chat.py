@@ -8,6 +8,39 @@ chat_bp = Blueprint('chat_bp', __name__)
    
 @chat_bp.route('/chat/send', methods=['POST'])
 def send_chat_message():
+    """
+    Send a chat message between patient and doctor
+    ---
+    tags:
+      - Chat
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - appointment_id
+              - sender
+              - text
+            properties:
+              appointment_id:
+                type: integer
+              sender:
+                type: string
+                enum: [patient, doctor]
+              text:
+                type: string
+    responses:
+      200:
+        description: Message saved successfully
+      400:
+        description: Invalid input
+      404:
+        description: Appointment or user not found
+      500:
+        description: Internal server error
+    """
     data = request.get_json()
     appointment_id = data.get('appointment_id')  # maps to appt_id
     sender_type = data.get('sender')            # "patient" or "doctor"
@@ -62,6 +95,41 @@ def send_chat_message():
 
 @chat_bp.route('/chat/<int:appointment_id>', methods=['GET'])
 def get_chat_messages(appointment_id):
+    """
+    Retrieve chat messages for a specific appointment
+    ---
+    tags:
+      - Chat
+    parameters:
+      - name: appointment_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    responses:
+      200:
+        description: List of chat messages
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  sender_id:
+                    type: integer
+                  receiver_id:
+                    type: integer
+                  message:
+                    type: string
+                  sent_at:
+                    type: string
+                    format: date-time
+      404:
+        description: No messages found
+      500:
+        description: Internal server error
+    """
     cursor = mysql.connection.cursor()
     try:
         cursor.execute("""
@@ -86,6 +154,36 @@ def get_chat_messages(appointment_id):
 
 @chat_bp.route('/user', methods=['GET'])
 def get_user_by_role_id():
+    """
+    Get user info by patient_id or doctor_id
+    ---
+    tags:
+      - Chat
+    parameters:
+      - name: patient_id
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: doctor_id
+        in: query
+        required: false
+        schema:
+          type: string
+    responses:
+      200:
+        description: User object
+        content:
+          application/json:
+            schema:
+              type: object
+      400:
+        description: Missing required parameter
+      404:
+        description: User not found
+      500:
+        description: Internal server error
+    """
     patient_id = request.args.get('patient_id')
     doctor_id = request.args.get('doctor_id')
 

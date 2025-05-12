@@ -15,6 +15,7 @@ jobs:
       MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
       MYSQL_DB: ${{ secrets.MYSQL_DB }}
       RABBITMQ_URL: ${{ secrets.RABBITMQ_URL }}
+      GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
 
     steps:
       - name: Check out code

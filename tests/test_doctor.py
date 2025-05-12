@@ -142,11 +142,11 @@ def test_get_all_doctors_success(client):
                 1, "Alice", "Nguyen", "alice@example.com", "Cardiology specialist", "MD123",
                 "2028-12-31", "1980-01-15", "Harvard", "Cardiology", 10, 200.0,
                 "Female", "1234567890", "123 Lane", "10001", "New York", "NY",
-                b"binarypicdata",          # [18] doctor_picture
-                True,                      # [19] accepting_patients
-                4.9,                       # [20] doctor_rating
-                "2021-01-01",              # [21] created_at
-                "2022-01-01"               # [22] updated_at
+                "data:image/png;base64,binarypicdata",  # <-- now a string
+                True,
+                4.9,
+                "2021-01-01",
+                "2022-01-01"
             )
         ]
 
@@ -158,7 +158,7 @@ def test_get_all_doctors_success(client):
         data = response.get_json()
         assert isinstance(data, list)
         assert data[0]['first_name'] == "Alice"
-        assert data[0]['doctor_picture'] == base64.b64encode(b"binarypicdata").decode()
+        assert data[0]['doctor_picture'] == "data:image/png;base64,binarypicdata"
         assert data[0]['accepting_patients'] is True
         assert data[0]['doctor_rating'] == 4.9
 
@@ -425,7 +425,7 @@ def test_get_patients_by_doctor_success(client):
         mock_cursor.fetchall.return_value = [
             (
                 1, 1, "patient@example.com", "1234567890",
-                "John", "Doe", "Asthma", 2, b"picdata",
+                "John", "Doe", "Asthma", 2, "data:image/png;base64,picdata",
                 "Appendectomy", "A+", "Weight loss", "High",
                 "BlueCross", "12345", "2025-12-31",
                 200.50, "2024-01-01", "2024-04-01"
@@ -434,6 +434,7 @@ def test_get_patients_by_doctor_success(client):
         mock_cursor_factory.return_value = mock_cursor
 
         response = client.get('/doc_patients/1')
+        assert response.get_json()[0]['profile_pic'] == "data:image/png;base64,picdata"
         assert response.status_code == 200
         assert isinstance(response.get_json(), list)
 

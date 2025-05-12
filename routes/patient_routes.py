@@ -726,7 +726,6 @@ def login_patient():
 def add_daily_survey():
     """
     Submit a new daily survey entry for a patient
-
     ---
     tags:
       - Survey
@@ -820,7 +819,6 @@ def add_daily_survey():
 def get_daily_surveys(patient_id):
     """
     Retrieve all daily survey records for a specific patient
-
     ---
     tags:
       - Survey
@@ -884,7 +882,6 @@ def get_daily_surveys(patient_id):
 def add_weekly_survey():
     """
     Submit a new weekly survey entry for a patient
-
     ---
     tags:
       - Survey
@@ -954,7 +951,6 @@ def add_weekly_survey():
 def get_weekly_surveys(patient_id):
     """
     Retrieve all weekly survey records for a specific patient
-
     ---
     tags:
       - Survey
@@ -962,7 +958,8 @@ def get_weekly_surveys(patient_id):
       - name: patient_id
         in: path
         required: true
-        type: integer
+        schema:
+          type: integer
         description: ID of the patient
     responses:
       200:
@@ -986,6 +983,17 @@ def get_weekly_surveys(patient_id):
                   weight_change:
                     type: number
                     format: float
+            example:
+              - ws_id: 1
+                patient_id: 5
+                week_start: "2024-04-01"
+                blood_pressure: "120/80"
+                weight_change: -1.2
+              - ws_id: 2
+                patient_id: 5
+                week_start: "2024-04-08"
+                blood_pressure: "118/76"
+                weight_change: 0.5
       400:
         description: Retrieval failed
     """
@@ -1012,7 +1020,6 @@ def get_weekly_surveys(patient_id):
 def add_appointment():
     """
     Create a new patient appointment
-
     ---
     tags:
       - Appointment
@@ -1045,21 +1052,10 @@ def add_appointment():
                 type: string
               accepted:
                 type: integer
-                enum: [0, 1]
-                default: 0
+                description: "0 for pending/denied, 1 for accepted"
               meal_prescribed:
                 type: string
-                enum:
-                  - Low Carb
-                  - Keto
-                  - Paleo
-                  - Mediterranean
-                  - Vegan
-                  - Vegetarian
-                  - Gluten-Free
-                  - Dairy-Free
-                  - Whole30
-                  - Flexitarian
+                description: "Optional dietary plan suggested by doctor"
           example:
             patient_id: 1
             doctor_id: 2
@@ -1076,6 +1072,7 @@ def add_appointment():
       400:
         description: Failed to create appointment
     """
+    
     data = request.get_json()
     cursor = mysql.connection.cursor()
 
@@ -1118,19 +1115,24 @@ def add_appointment():
 def get_all_appointments(patient_id):
     """
     Get all appointments for a specific patient
-
     ---
     tags:
       - Appointment
     parameters:
       - name: patient_id
         in: path
-        type: integer
         required: true
-        description: ID of the patient
+        schema:
+          type: integer
     responses:
       200:
         description: List of appointments
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
       400:
         description: Retrieval failed
     """

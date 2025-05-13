@@ -1929,7 +1929,7 @@ def make_general_payment(patient_id):
                 "maximum_allowed": -current_balance
             }), 400
         
-        credit = -credit  # Store as negative for accounting
+        # credit = -credit  # Store as negative for accounting
         # Insert credit payment
         cursor.execute("""
             INSERT INTO PATIENT_CREDIT (patient_id, amount)

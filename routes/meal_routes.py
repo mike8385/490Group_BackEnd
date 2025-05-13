@@ -585,3 +585,57 @@ def get_patient_meal_plans(patient_id):
 
     return jsonify(meal_plans), 200
 
+# need to test this
+# get all meal plans in database
+@meal_bp.route('/get-doctor-meal-plans/', methods=['GET'])
+def get_doctor_meal_plans():
+    """
+    Get all meal plans
+
+    ---
+    tags:
+      - Appointment
+    responses:
+      200:
+        description: List of meal plans created by the doctor
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  meal_plan_id:
+                    type: integer
+                  title:
+                    type: string
+                  tag:
+                    type: string
+                  made_by:
+                    type: string
+            example:
+              - meal_plan_id: 1
+                title: "Keto Kickstart"
+                tag: "Keto"
+                made_by: "Dr. Alex Kim"
+              - meal_plan_id: 2
+                title: "Plant Power"
+                tag: "Vegan"
+                made_by: "Jamie Rivera"
+      404:
+        description: Doctor not found or no meal plans available
+    """
+
+    cursor = mysql.connection.cursor(DictCursor)
+
+    cursor.execute("""
+        SELECT *
+        FROM MEAL_PLAN mp
+    """)
+    meal_plans = cursor.fetchall()
+    cursor.close()
+
+    if not meal_plans:
+        return jsonify({'message': 'No meal plans found.'}), 404
+
+    return jsonify(meal_plans), 200

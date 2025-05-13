@@ -1138,7 +1138,7 @@ def add_appointment():
                 type: integer
                 description: "0 for pending/denied, 1 for accepted"
               meal_prescribed:
-                type: string
+                type: int
                 description: "Optional dietary plan suggested by doctor"
           example:
             patient_id: 1
@@ -1149,7 +1149,7 @@ def add_appointment():
             exercise_frequency: "3x/week"
             doctor_appointment_note: ""
             accepted: 0
-            meal_prescribed: "Mediterranean"
+            meal_prescribed: 1
     responses:
       201:
         description: Appointment created successfully
@@ -1639,15 +1639,24 @@ def add_patient_bill():
         pharm_bill = float(pharm_result[0]) if pharm_result else 0.0
 
         # Determine appointment count for article naming
-        cursor.execute("""
-            SELECT COUNT(*)
-            FROM PATIENT_BILL pb
-            JOIN PATIENT_APPOINTMENT pa ON pb.appt_id = pa.patient_appt_id
-            WHERE pa.patient_id = %s
-        """, (patient_id,))
-        count_result = cursor.fetchone()
-        appt_number = (count_result[0] or 0) + 1
-        article_name = f"Appt {appt_number}"
+        if appt_id > 551:
+          cursor.execute("""
+              SELECT COUNT(*)
+              FROM PATIENT_BILL pb
+              JOIN PATIENT_APPOINTMENT pa ON pb.appt_id = pa.patient_appt_id
+              WHERE pa.patient_id = %s
+          """, (patient_id,))
+          count_result = cursor.fetchone()
+          appt_number = (count_result[0] or 0) + 1
+          article_name = f"Appt {appt_number}"
+        else:
+          cursor.execute("""
+              SELECT article
+              FROM PATIENT_BILL
+              WHERE appt_id = %s
+          """, (appt_id,))
+          article_result = cursor.fetchone()
+          article_name = f"Appt {article_result}"
 
         # Insert the new bill (charge only)
         current_bill = doctor_bill + pharm_bill
@@ -1954,6 +1963,7 @@ def make_general_payment(patient_id):
             "message": "General payment recorded successfully.",
             "patient_id": patient_id,
             "credit": credit,
+            "pharm_bill": "",
             "article": "Credit Card Payment",
             "new_balance": updated_balance
         }), 201

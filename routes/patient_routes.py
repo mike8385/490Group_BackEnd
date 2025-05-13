@@ -1926,7 +1926,7 @@ def make_general_payment(patient_id):
                 "error": "Payment exceeds outstanding balance.",
                 "current_balance": current_balance,
                 "requested_payment": credit,
-                "maximum_allowed": -current_balance
+                # "maximum_allowed": -current_balance
             }), 400
         
         # credit = -credit  # Store as negative for accounting

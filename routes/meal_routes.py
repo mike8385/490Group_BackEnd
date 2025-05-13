@@ -665,3 +665,49 @@ def clear_meals_for_day():
         return jsonify({'error': str(e)}), 400
     finally:
         cursor.close()
+
+@meal_bp.route('/delete-meal-plan/<int:meal_plan_id>', methods=['DELETE'])
+def delete_meal_plan(meal_plan_id):
+    """
+    Delete a meal plan and all its entries
+
+    ---
+    tags:
+      - Meal Plan
+    parameters:
+      - name: meal_plan_id
+        in: path
+        type: integer
+        required: true
+        description: ID of the meal plan to delete
+    responses:
+      200:
+        description: Meal plan deleted successfully
+      404:
+        description: Meal plan not found
+      500:
+        description: Internal server error
+    """
+    cursor = mysql.connection.cursor()
+    try:
+        # First delete all entries associated with this meal plan
+        cursor.execute("DELETE FROM MEAL_PLAN_ENTRY WHERE meal_plan_id = %s", (meal_plan_id,))
+        
+        # Then delete from PATIENT_PLANS if it exists there
+        cursor.execute("DELETE FROM PATIENT_PLANS WHERE meal_plan_id = %s", (meal_plan_id,))
+        
+        # Finally delete the meal plan itself
+        cursor.execute("DELETE FROM MEAL_PLAN WHERE meal_plan_id = %s", (meal_plan_id,))
+        
+        mysql.connection.commit()
+        
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'Meal plan not found'}), 404
+            
+        return jsonify({'message': 'Meal plan deleted successfully'}), 200
+        
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()

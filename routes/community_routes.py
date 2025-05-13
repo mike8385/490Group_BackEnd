@@ -200,6 +200,59 @@ def get_all_posts():
     responses:
       200:
         description: List of all community posts
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  post_id:
+                    type: integer
+                  meal_id:
+                    type: integer
+                  user_id:
+                    type: integer
+                  description:
+                    type: string
+                  picture:
+                    type: string
+                    nullable: true
+                    description: URL or encoded string of the image
+                  created_at:
+                    type: string
+                    format: date-time
+                  meal_name:
+                    type: string
+                  meal_calories:
+                    type: integer
+                  first_name:
+                    type: string
+                  last_name:
+                    type: string
+                  tag:
+                    type: string
+                    description: Comma-separated tags from meal plans or custom tags
+                  like_count:
+                    type: integer
+                    description: Number of likes on the post
+                  comment_count:
+                    type: integer
+                    description: Number of comments on the post
+            example:
+              - post_id: 101
+                meal_id: 12
+                user_id: 5
+                description: "Great low-carb recipe!"
+                picture: "https://storage.googleapis.com/mybucket/post101.jpg"
+                created_at: "2025-05-12T14:00:00"
+                meal_name: "Grilled Chicken Salad"
+                meal_calories: 320
+                first_name: "Alex"
+                last_name: "Kim"
+                tag: "Keto, Protein Rich"
+                like_count: 14
+                comment_count: 3
     """
     cursor = mysql.connection.cursor()
     query = """
@@ -371,11 +424,13 @@ def get_liked_posts():
     parameters:
       - name: patient_id
         in: query
-        type: integer
+        schema:
+          type: integer
         required: false
       - name: doctor_id
         in: query
-        type: integer
+        schema:
+          type: integer
         required: false
     responses:
       200:

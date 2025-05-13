@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from rabbitmq_utils import send_medication_request
+from emails_utils import send_appointment_email
 from db import mysql
 import bcrypt, base64
 # from google.cloud import storage
@@ -355,6 +356,35 @@ def update_appointment_status(appointment_id):
             message = "Appointment denied (status set to 0.5) successfully."
 
         mysql.connection.commit()
+
+        # After updating the DB status...
+        cursor.execute("""
+            SELECT p.email, p.first_name, pa.appointment_datetime
+            FROM PATIENT_APPOINTMENT pa
+            JOIN PATIENT p ON pa.patient_id = p.patient_id
+            WHERE pa.patient_appt_id = %s
+        """, (appointment_id,))
+        result = cursor.fetchone()
+
+        if result:
+            patient_email, patient_name, appt_time = result
+            if new_status == 1:
+                subject = "Appointment Confirmed"
+                html = f"""
+                <h3>Hi {patient_name},</h3>
+                <p>Your appointment on <strong>{appt_time}</strong> has been <span style="color:green;">accepted</span>.</p>
+                <p>Thank you for using our portal!</p>
+                """
+            else:
+                subject = "Appointment Denied"
+                html = f"""
+                <h3>Hi {patient_name},</h3>
+                <p>Your appointment on <strong>{appt_time}</strong> has been <span style="color:red;">denied</span>.</p>
+                <p>Please try rescheduling.</p>
+                """
+
+            send_appointment_email(patient_email, patient_name, subject, html)
+
         return jsonify({"message": message}), 200
 
     except Exception as e:

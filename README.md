@@ -8,4 +8,4 @@ Then, install the needed libraries through the requirements.txt file:
 pip install -r requirements.txt
 
 Run the File:
-python server.py
+python server.py 

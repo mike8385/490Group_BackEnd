@@ -26,6 +26,9 @@ CORS(app)
 swagger = Swagger(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
+# loading google_application credentials from env variable
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+
 # MySQL config
 app.config['MYSQL_HOST'] = config.MYSQL_HOST
 app.config['MYSQL_USER'] = config.MYSQL_USER

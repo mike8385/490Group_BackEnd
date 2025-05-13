@@ -8,6 +8,8 @@ def test_db_connection():
     """
     Test database connection
     ---
+    tags:
+      - Testing
     responses:
       200:
         description: Successfully connected to the database

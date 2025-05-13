@@ -520,6 +520,7 @@ def get_all_doctors():
 
     return jsonify(result), 200
 
+# need to test this
 # get appointments by doctor
 @doctor_bp.route('/doc-appointments/<int:doctor_id>', methods=['GET'])
 def get_appointments_by_doctor(doctor_id):
@@ -563,7 +564,7 @@ def get_appointments_by_doctor(doctor_id):
                   accepted:
                     type: number
                   meal_prescribed:
-                    type: string
+                    type: int
                   created_at:
                     type: string
                     format: date-time
@@ -596,13 +597,14 @@ def get_appointments_by_doctor(doctor_id):
             pa.exercise_frequency,
             pa.doctor_appointment_note,
             pa.accepted,
-            pa.meal_prescribed,
             pa.created_at,
             pa.updated_at,
             p.first_name AS patient_first_name,
-            p.last_name AS patient_last_name
+            p.last_name AS patient_last_name,
+            mp.meal_plan_title AS meal_prescribed
         FROM PATIENT_APPOINTMENT pa
         JOIN PATIENT p ON pa.patient_id = p.patient_id
+        JOIN MEAL_PLAN mp ON pa.meal_prescribed = mp.meal_plan_id
         WHERE p.doctor_id = %s
         ORDER BY pa.appointment_datetime DESC
     """
@@ -782,6 +784,94 @@ def add_prescription():
         mysql.connection.rollback()
         return jsonify({"error": str(e)}), 400
 
+    finally:
+        cursor.close()
+
+# need to test this
+@doctor_bp.route('/appointment/meal', methods=['POST'])
+def assign_plan_to_patient():
+    """
+    Assign a meal plan to a patient
+    ---
+    tags:
+      - Appointment
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - appt_id
+              - meal_plan_id
+            properties:
+              appt_id:
+                type: integer
+              meal_plan_id:
+                type: integer
+          example:
+            appt_id: 1
+            meal_plan_id: 2
+    responses:
+      200:
+        description: Meal plan assigned successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+      400:
+        description: Validation or database error
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+    """
+    data = request.get_json()
+    appt_id = data.get('appt_id')
+    meal_plan_id = data.get('meal_plan_id')
+
+    if not appt_id or not meal_plan_id:
+        return jsonify({"error": "appt_id and meal_plan_id are required."}), 400
+
+    cursor = mysql.connection.cursor()
+
+    query = """
+        UPDATE PATIENT_APPOINTMENT
+        SET meal_prescribed = %s, updated_at = CURRENT_TIMESTAMP
+        WHERE appt_id = %s
+    """
+    values = (meal_plan_id, appt_id)
+    cursor.execute(query, values)
+
+    patient_id_query = """
+        SELECT patient_id FROM PATIENT_APPOINTMENT
+        WHERE patient_appt_id = %s"""
+    cursor.execute(patient_id_query, (appt_id,))
+
+    patient_id = cursor.fetchone()
+
+    add_to_patient_plans = """
+        INSERT INTO PATIENT_MEAL_PLAN (patient_id, meal_plan_id)
+        VALUES (%s, %s)
+    """
+    
+    cursor.execute(add_to_patient_plans, (patient_id, meal_plan_id))
+    try:
+        mysql.connection.commit()
+        if cursor.rowcount == 0:
+            return jsonify({"error": "No appointment found for this patient."}), 404
+
+        return jsonify({"message": "Meal plan assigned successfully."}), 200
+
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 400
     finally:
         cursor.close()
 
@@ -1085,6 +1175,8 @@ def get_patients_by_doctor(doctor_id):
 
     return jsonify(result), 200 if result else 404
 
+# need to test this
+# changed meal_plan_prescribed to get meal_plans in db 
 @doctor_bp.route('/doc-past/<int:doctor_id>', methods=['GET'])
 def get_past_appointments_by_doctor(doctor_id):
     """
@@ -1128,13 +1220,14 @@ def get_past_appointments_by_doctor(doctor_id):
             pa.exercise_frequency,
             pa.doctor_appointment_note,
             pa.accepted,
-            pa.meal_prescribed,
             pa.created_at,
             pa.updated_at,
             p.first_name AS patient_first_name,
-            p.last_name AS patient_last_name
+            p.last_name AS patient_last_name,
+            mp.meal_plan_title AS meal_prescribed
         FROM PATIENT_APPOINTMENT pa
         JOIN PATIENT p ON pa.patient_id = p.patient_id
+        JOIN MEAL_PLAN mp ON pa.meal_prescribed = mp.meal_plan_id
         WHERE p.doctor_id = %s AND pa.appointment_datetime < NOW()
         ORDER BY pa.appointment_datetime DESC
     """
@@ -1148,6 +1241,7 @@ def get_past_appointments_by_doctor(doctor_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+# changed meal_plan_prescribed to get meal_plans in db
 @doctor_bp.route('/doc-upcoming/<int:doctor_id>', methods=['GET'])
 def get_upcoming_appointments_by_doctor(doctor_id):
     """
@@ -1191,7 +1285,6 @@ def get_upcoming_appointments_by_doctor(doctor_id):
             pa.exercise_frequency,
             pa.doctor_appointment_note,
             pa.accepted,
-            pa.meal_prescribed,
             pa.created_at,
             pa.updated_at,
             p.first_name AS patient_first_name,
@@ -1211,6 +1304,8 @@ def get_upcoming_appointments_by_doctor(doctor_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+# need to test this
+# changed meal_plan_prescribed to get meal_plans in db
 @doctor_bp.route('/requested-appointments/<int:doctor_id>', methods=['GET'])
 def get_requested_appointments(doctor_id):
     """
@@ -1254,7 +1349,6 @@ def get_requested_appointments(doctor_id):
             pa.exercise_frequency,
             pa.doctor_appointment_note,
             pa.accepted,
-            pa.meal_prescribed,
             pa.created_at,
             pa.updated_at,
             p.first_name AS patient_first_name,

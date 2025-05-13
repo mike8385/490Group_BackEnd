@@ -585,3 +585,83 @@ def get_patient_meal_plans(patient_id):
 
     return jsonify(meal_plans), 200
 
+# need to test this
+# get all meal plans in database
+@meal_bp.route('/get-doctor-meal-plans/', methods=['GET'])
+def get_doctor_meal_plans():
+    """
+    Get all meal plans
+
+    ---
+    tags:
+      - Appointment
+    responses:
+      200:
+        description: List of meal plans created by the doctor
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  meal_plan_id:
+                    type: integer
+                  title:
+                    type: string
+                  tag:
+                    type: string
+                  made_by:
+                    type: string
+            example:
+              - meal_plan_id: 1
+                title: "Keto Kickstart"
+                tag: "Keto"
+                made_by: "Dr. Alex Kim"
+              - meal_plan_id: 2
+                title: "Plant Power"
+                tag: "Vegan"
+                made_by: "Jamie Rivera"
+      404:
+        description: Doctor not found or no meal plans available
+    """
+
+    cursor = mysql.connection.cursor(DictCursor)
+
+    cursor.execute("""
+        SELECT *
+        FROM MEAL_PLAN mp
+    """)
+    meal_plans = cursor.fetchall()
+    cursor.close()
+
+    if not meal_plans:
+        return jsonify({'message': 'No meal plans found.'}), 404
+
+    return jsonify(meal_plans), 200
+
+@meal_bp.route('/clear-meals', methods=['POST'])
+def clear_meals_for_day():
+    """
+    Clear meals for a specific day in a meal plan
+    """
+    data = request.get_json()
+    meal_plan_id = data.get('meal_plan_id')
+    day_of_week = data.get('day_of_week')
+
+    if not meal_plan_id or not day_of_week:
+        return jsonify({'error': 'meal_plan_id and day_of_week are required'}), 400
+
+    cursor = mysql.connection.cursor()
+    try:
+        cursor.execute("""
+            DELETE FROM MEAL_PLAN_ENTRY 
+            WHERE meal_plan_id = %s AND day_of_week = %s
+        """, (meal_plan_id, day_of_week))
+        mysql.connection.commit()
+        return jsonify({'message': 'Meals cleared successfully'}), 200
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({'error': str(e)}), 400
+    finally:
+        cursor.close()

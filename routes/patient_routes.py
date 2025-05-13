@@ -273,6 +273,90 @@ def get_patient(patient_id):
 
 @patient_bp.route('/init-patient-survey', methods=['POST'])
 def init_patient_survey():
+    """
+    Submit initial survey for a patient
+
+    ---
+    tags:
+      - Patient
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - patient_id
+              - mobile_number
+              - dob
+              - blood_type
+              - patient_address
+              - patient_zipcode
+              - patient_city
+              - patient_state
+            properties:
+              patient_id:
+                type: integer
+              mobile_number:
+                type: string
+              dob:
+                type: string
+                format: date
+              gender:
+                type: string
+              height:
+                type: number
+              weight:
+                type: number
+              activity:
+                type: number
+              health_goals:
+                type: string
+              dietary_restrictions:
+                type: string
+              blood_type:
+                type: string
+              patient_address:
+                type: string
+              patient_zipcode:
+                type: string
+              patient_city:
+                type: string
+              patient_state:
+                type: string
+              medical_conditions:
+                type: string
+              family_history:
+                type: string
+              past_procedures:
+                type: string
+              favorite_meal:
+                type: string
+          example:
+            patient_id: 1
+            mobile_number: "555-1111"
+            dob: "1990-01-01"
+            gender: "Male"
+            height: 180
+            weight: 75
+            activity: 3
+            health_goals: "Lose weight"
+            dietary_restrictions: "None"
+            blood_type: "O+"
+            patient_address: "123 Main St"
+            patient_zipcode: "10001"
+            patient_city: "New York"
+            patient_state: "NY"
+            medical_conditions: "Asthma"
+            family_history: "Diabetes"
+            past_procedures: "Appendectomy"
+            favorite_meal: "Grilled chicken"
+    responses:
+      201:
+        description: Survey data submitted
+      400:
+        description: Submission failed
+    """
     data = request.get_json()
     cursor = mysql.connection.cursor()
 
@@ -1375,31 +1459,31 @@ def get_single_appointment_by_id(appointment_id):
 
     query = """
         SELECT 
-    PA.*, 
-    P.first_name AS patient_name, 
-    D.first_name AS doctor_name,
-    S.mobile_number,
-    S.dob,
-    S.gender AS survey_gender,
-    S.height AS survey_height,
-    S.weight AS survey_weight,
-    S.activity,
-    S.health_goals,
-    S.dietary_restrictions,
-    S.blood_type,
-    S.patient_address,
-    S.patient_zipcode,
-    S.patient_city,
-    S.patient_state,
-    S.medical_conditions,
-    S.family_history,
-    S.past_procedures,
-    S.favorite_meal
-FROM PATIENT_APPOINTMENT PA
-JOIN PATIENT P ON PA.patient_id = P.patient_id
-JOIN DOCTOR D ON PA.doctor_id = D.doctor_id
-LEFT JOIN PATIENT_INIT_SURVEY S ON P.patient_id = S.patient_id
-WHERE PA.patient_appt_id = %s
+          PA.*, 
+          P.first_name AS patient_name, 
+          D.first_name AS doctor_name,
+          S.mobile_number,
+          S.dob,
+          S.gender AS survey_gender,
+          S.height AS survey_height,
+          S.weight AS survey_weight,
+          S.activity,
+          S.health_goals,
+          S.dietary_restrictions,
+          S.blood_type,
+          S.patient_address,
+          S.patient_zipcode,
+          S.patient_city,
+          S.patient_state,
+          S.medical_conditions,
+          S.family_history,
+          S.past_procedures,
+          S.favorite_meal
+      FROM PATIENT_APPOINTMENT PA
+      JOIN PATIENT P ON PA.patient_id = P.patient_id
+      JOIN DOCTOR D ON PA.doctor_id = D.doctor_id
+      LEFT JOIN PATIENT_INIT_SURVEY S ON P.patient_id = S.patient_id
+      WHERE PA.patient_appt_id = %s
 
     """
 
@@ -1615,6 +1699,76 @@ def add_patient_bill():
 def get_all_bills_for_patient(patient_id):
     """
     Retrieve all billing records (charges and credits) with running balance for a patient
+
+    ---
+    tags:
+      - Billing
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: ID of the patient
+    responses:
+      200:
+        description: List of charges and credits with running balance
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    description: Unique ID of the bill or credit
+                  article:
+                    type: string
+                    description: Description or label for the charge or credit
+                  created_at:
+                    type: string
+                    format: date-time
+                    description: Timestamp of when the charge or credit was created
+                  doctor_bill:
+                    type: number
+                    nullable: true
+                    description: Doctor’s fee for the appointment
+                  pharm_bill:
+                    type: number
+                    nullable: true
+                    description: Total cost of prescribed medicines
+                  credit:
+                    type: number
+                    nullable: true
+                    description: Amount credited to the patient’s account
+                  current_bill:
+                    type: number
+                    description: Patient's balance after this transaction
+            example:
+              - id: 10
+                article: "Appt 3"
+                created_at: "2025-05-12T10:00:00"
+                doctor_bill: 75.0
+                pharm_bill: 45.0
+                credit: ""
+                current_bill: -120.0
+              - id: 7
+                article: "credit"
+                created_at: "2025-05-10T08:30:00"
+                doctor_bill: ""
+                pharm_bill: ""
+                credit: 100.0
+                current_bill: -45.0
+      400:
+        description: Failed to retrieve billing records
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
     """
     cursor = mysql.connection.cursor()
 

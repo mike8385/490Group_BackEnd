@@ -104,7 +104,7 @@ def register_doctor():
             zipcode: "94043"
             city: "Mountain View"
             state: "CA"
-            doctor_picture: "<base64 string>"
+            doctor_picture: "https://storage.googleapis.com/doctors/file"
     responses:
       201:
         description: Doctor registered successfully!
@@ -299,27 +299,29 @@ def login_doctor():
     tags:
     - Doctor
     requestBody:
-    required: true
-    content:
+      required: true
+      content:
         application/json:
-        schema:
+          schema:
             type: object
             required:
-            - email
-            - password
+              - email
+              - password
             properties:
-            email: { type: string }
-            password: { type: string }
-        example:
+              email:
+                type: string
+              password:
+                type: string
+          example:
             email: "alice@example.com"
             password: "password123"
     responses:
-    200:
-        description: Login Successful with the Doctor ID.
-    401:
-        description: Invalid credentials.
-    404:
-        description: Doctor not found.
+        200:
+            description: Login Successful with the Doctor ID.
+        401:
+            description: Invalid credentials.
+        404:
+            description: Doctor not found.
     """
     data = request.get_json()
     email = data.get('email')
@@ -524,11 +526,63 @@ def get_appointments_by_doctor(doctor_id):
     """
     Get appointments by doctor ID
     ---
+    tags:
+      - Appointment
+    parameters:
+      - name: doctor_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: ID of the doctor
     responses:
       200:
-        description: Information about the appointments is returned
+        description: List of appointments for the doctor
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  patient_appt_id:
+                    type: integer
+                  patient_id:
+                    type: integer
+                  appointment_datetime:
+                    type: string
+                    format: date-time
+                  reason_for_visit:
+                    type: string
+                  current_medications:
+                    type: string
+                  exercise_frequency:
+                    type: string
+                  doctor_appointment_note:
+                    type: string
+                  accepted:
+                    type: number
+                  meal_prescribed:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date-time
+                  updated_at:
+                    type: string
+                    format: date-time
+                  patient_first_name:
+                    type: string
+                  patient_last_name:
+                    type: string
       400:
-        description: Error message based on what went wrong.
+        description: Error retrieving appointments
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
     """
     cursor = mysql.connection.cursor()
 

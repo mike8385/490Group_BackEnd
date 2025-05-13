@@ -639,3 +639,29 @@ def get_doctor_meal_plans():
         return jsonify({'message': 'No meal plans found.'}), 404
 
     return jsonify(meal_plans), 200
+
+@meal_bp.route('/clear-meals', methods=['POST'])
+def clear_meals_for_day():
+    """
+    Clear meals for a specific day in a meal plan
+    """
+    data = request.get_json()
+    meal_plan_id = data.get('meal_plan_id')
+    day_of_week = data.get('day_of_week')
+
+    if not meal_plan_id or not day_of_week:
+        return jsonify({'error': 'meal_plan_id and day_of_week are required'}), 400
+
+    cursor = mysql.connection.cursor()
+    try:
+        cursor.execute("""
+            DELETE FROM MEAL_PLAN_ENTRY 
+            WHERE meal_plan_id = %s AND day_of_week = %s
+        """, (meal_plan_id, day_of_week))
+        mysql.connection.commit()
+        return jsonify({'message': 'Meals cleared successfully'}), 200
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({'error': str(e)}), 400
+    finally:
+        cursor.close()

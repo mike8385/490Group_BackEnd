@@ -847,11 +847,23 @@ def assign_plan_to_patient():
         WHERE appt_id = %s
     """
     values = (meal_plan_id, appt_id)
+    cursor.execute(query, values)
 
+    patient_id_query = """
+        SELECT patient_id FROM PATIENT_APPOINTMENT
+        WHERE patient_appt_id = %s"""
+    cursor.execute(patient_id_query, (appt_id,))
+
+    patient_id = cursor.fetchone()
+
+    add_to_patient_plans = """
+        INSERT INTO PATIENT_MEAL_PLAN (patient_id, meal_plan_id)
+        VALUES (%s, %s)
+    """
+    
+    cursor.execute(add_to_patient_plans, (patient_id, meal_plan_id))
     try:
-        cursor.execute(query, values)
         mysql.connection.commit()
-
         if cursor.rowcount == 0:
             return jsonify({"error": "No appointment found for this patient."}), 404
 
@@ -1229,7 +1241,6 @@ def get_past_appointments_by_doctor(doctor_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-# need to test this
 # changed meal_plan_prescribed to get meal_plans in db
 @doctor_bp.route('/doc-upcoming/<int:doctor_id>', methods=['GET'])
 def get_upcoming_appointments_by_doctor(doctor_id):
@@ -1278,10 +1289,8 @@ def get_upcoming_appointments_by_doctor(doctor_id):
             pa.updated_at,
             p.first_name AS patient_first_name,
             p.last_name AS patient_last_name
-            mp.meal_plan_title AS meal_prescribed
         FROM PATIENT_APPOINTMENT pa
         JOIN PATIENT p ON pa.patient_id = p.patient_id
-        JOIN MEAL_PLAN mp ON pa.meal_prescribed = mp.meal_plan_id
         WHERE p.doctor_id = %s AND pa.appointment_datetime >= NOW() AND pa.accepted = 1
         ORDER BY pa.appointment_datetime ASC
     """
@@ -1343,11 +1352,9 @@ def get_requested_appointments(doctor_id):
             pa.created_at,
             pa.updated_at,
             p.first_name AS patient_first_name,
-            p.last_name AS patient_last_name,
-            mp.meal_plan_title AS meal_prescribed
+            p.last_name AS patient_last_name
         FROM PATIENT_APPOINTMENT pa
         JOIN PATIENT p ON pa.patient_id = p.patient_id
-        JOIN MEAL_PLAN mp ON pa.meal_prescribed = mp.meal_plan_id
         WHERE p.doctor_id = %s
           AND pa.appointment_datetime >= NOW()
           AND (pa.accepted = 0 OR pa.accepted IS NULL)

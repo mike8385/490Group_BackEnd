@@ -1149,7 +1149,6 @@ def add_appointment():
             exercise_frequency: "3x/week"
             doctor_appointment_note: ""
             accepted: 0
-            meal_prescribed: 1
     responses:
       201:
         description: Appointment created successfully
@@ -1169,9 +1168,8 @@ def add_appointment():
             current_medications,
             exercise_frequency,
             doctor_appointment_note,
-            accepted,
-            meal_prescribed
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            accepted
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
     """
 
     values = (
@@ -1183,7 +1181,7 @@ def add_appointment():
         data.get('exercise_frequency'),
         data.get('doctor_appointment_note'),
         data.get('accepted', 0),
-        data.get('meal_prescribed')
+        # data.get('meal_prescribed')
     )
 
     try:

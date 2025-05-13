@@ -585,8 +585,66 @@ def get_patient_meal_plans(patient_id):
 
     return jsonify(meal_plans), 200
 
+# need to test this
+# get all meal plans in database
+@meal_bp.route('/get-doctor-meal-plans/', methods=['GET'])
+def get_doctor_meal_plans():
+    """
+    Get all meal plans
+
+    ---
+    tags:
+      - Appointment
+    responses:
+      200:
+        description: List of meal plans created by the doctor
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  meal_plan_id:
+                    type: integer
+                  title:
+                    type: string
+                  tag:
+                    type: string
+                  made_by:
+                    type: string
+            example:
+              - meal_plan_id: 1
+                title: "Keto Kickstart"
+                tag: "Keto"
+                made_by: "Dr. Alex Kim"
+              - meal_plan_id: 2
+                title: "Plant Power"
+                tag: "Vegan"
+                made_by: "Jamie Rivera"
+      404:
+        description: Doctor not found or no meal plans available
+    """
+
+    cursor = mysql.connection.cursor(DictCursor)
+
+    cursor.execute("""
+        SELECT *
+        FROM MEAL_PLAN mp
+    """)
+    meal_plans = cursor.fetchall()
+    cursor.close()
+
+    if not meal_plans:
+        return jsonify({'message': 'No meal plans found.'}), 404
+
+    return jsonify(meal_plans), 200
+
 @meal_bp.route('/clear-meals', methods=['POST'])
 def clear_meals_for_day():
+    """
+    Clear meals for a specific day in a meal plan
+    """
     data = request.get_json()
     meal_plan_id = data.get('meal_plan_id')
     day_of_week = data.get('day_of_week')
@@ -605,5 +663,51 @@ def clear_meals_for_day():
     except Exception as e:
         mysql.connection.rollback()
         return jsonify({'error': str(e)}), 400
+    finally:
+        cursor.close()
+
+@meal_bp.route('/delete-meal-plan/<int:meal_plan_id>', methods=['DELETE'])
+def delete_meal_plan(meal_plan_id):
+    """
+    Delete a meal plan and all its entries
+
+    ---
+    tags:
+      - Meal Plan
+    parameters:
+      - name: meal_plan_id
+        in: path
+        type: integer
+        required: true
+        description: ID of the meal plan to delete
+    responses:
+      200:
+        description: Meal plan deleted successfully
+      404:
+        description: Meal plan not found
+      500:
+        description: Internal server error
+    """
+    cursor = mysql.connection.cursor()
+    try:
+        # First delete all entries associated with this meal plan
+        cursor.execute("DELETE FROM MEAL_PLAN_ENTRY WHERE meal_plan_id = %s", (meal_plan_id,))
+        
+        # Then delete from PATIENT_PLANS if it exists there
+        cursor.execute("DELETE FROM PATIENT_PLANS WHERE meal_plan_id = %s", (meal_plan_id,))
+        
+        # Finally delete the meal plan itself
+        cursor.execute("DELETE FROM MEAL_PLAN WHERE meal_plan_id = %s", (meal_plan_id,))
+        
+        mysql.connection.commit()
+        
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'Meal plan not found'}), 404
+            
+        return jsonify({'message': 'Meal plan deleted successfully'}), 200
+        
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({'error': str(e)}), 500
     finally:
         cursor.close()

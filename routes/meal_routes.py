@@ -587,14 +587,14 @@ def get_patient_meal_plans(patient_id):
 
 # need to test this
 # get all meal plans in database
-@meal_bp.route('/get-doctor-meal-plans/', methods=['GET'])
-def get_doctor_meal_plans():
+@meal_bp.route('/get-doctor-meal-plans/<int:doctor_id>', methods=['GET'])
+def get_doctor_meal_plans(doctor_id):
     """
     Get all meal plans
 
     ---
     tags:
-      - Appointment
+      - Meal Plan
     responses:
       200:
         description: List of meal plans created by the doctor
@@ -628,15 +628,39 @@ def get_doctor_meal_plans():
 
     cursor = mysql.connection.cursor(DictCursor)
 
-    cursor.execute("""
-        SELECT *
-        FROM MEAL_PLAN mp
-    """)
+    # Step 1: get user_id of the patient
+    cursor.execute("SELECT user_id FROM USER WHERE doctor_id = %s", (doctor_id,))
+    result = cursor.fetchone()
+    if not result:
+        return jsonify({"error": "Doctor not found"}), 404
+
+    user_id = result['user_id']
+
+    # Step 2: query meal plans (created or assigned)
+    query = """
+      SELECT DISTINCT
+          mp.meal_plan_id,
+          mp.meal_plan_title AS title,
+          mp.meal_plan_name AS tag,
+          mp.created_at,
+          CASE
+              WHEN d.first_name IS NOT NULL THEN CONCAT('Dr. ', d.first_name, ' ', d.last_name)
+              ELSE CONCAT(p.first_name, ' ', p.last_name)
+          END AS made_by
+      FROM MEAL_PLAN mp
+      JOIN USER u ON mp.made_by = u.user_id
+      LEFT JOIN DOCTOR d ON u.doctor_id = d.doctor_id
+      LEFT JOIN PATIENT p ON u.patient_id = p.patient_id
+      WHERE mp.made_by = %s
+        OR mp.meal_plan_id IN (
+              SELECT meal_plan_id FROM PATIENT_PLANS WHERE user_id = %s
+        )
+      ORDER BY mp.meal_plan_id DESC;
+      """
+
+    cursor.execute(query, (user_id, user_id))
     meal_plans = cursor.fetchall()
     cursor.close()
-
-    if not meal_plans:
-        return jsonify({'message': 'No meal plans found.'}), 404
 
     return jsonify(meal_plans), 200
 

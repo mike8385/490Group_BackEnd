@@ -1337,7 +1337,7 @@ def get_past_appointments(patient_id):
             DOCTOR D ON PA.doctor_id = D.doctor_id
         WHERE 
             PA.patient_id = %s 
-            AND PA.appointment_datetime < NOW()
+            AND (pa.appointment_datetime < NOW() OR pa.appt_status = 2)
         ORDER BY 
             PA.appointment_datetime DESC;
 
@@ -2347,7 +2347,8 @@ def get_past_appointments_with_doctor(patient_id, doctor_id):
 
     query = """
         SELECT * FROM PATIENT_APPOINTMENT
-        WHERE patient_id = %s AND doctor_id = %s AND appointment_datetime < NOW()
+        WHERE patient_id = %s AND doctor_id = %s
+        AND (pa.appointment_datetime < NOW() OR pa.appt_status = 2)
         ORDER BY appointment_datetime DESC
     """
 

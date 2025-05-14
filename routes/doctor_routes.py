@@ -790,48 +790,6 @@ def add_prescription():
 # need to test this
 @doctor_bp.route('/appointment/meal', methods=['POST'])
 def assign_plan_to_patient():
-    """
-    Assign a meal plan to a patient
-    ---
-    tags:
-      - Appointment
-    requestBody:
-      required: true
-      content:
-        application/json:
-          schema:
-            type: object
-            required:
-              - appt_id
-              - meal_plan_id
-            properties:
-              appt_id:
-                type: integer
-              meal_plan_id:
-                type: integer
-          example:
-            appt_id: 1
-            meal_plan_id: 2
-    responses:
-      200:
-        description: Meal plan assigned successfully
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                message:
-                  type: string
-      400:
-        description: Validation or database error
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                error:
-                  type: string
-    """
     data = request.get_json()
     appt_id = data.get('appt_id')
     meal_plan_id = data.get('meal_plan_id')
@@ -841,32 +799,36 @@ def assign_plan_to_patient():
 
     cursor = mysql.connection.cursor()
 
-    query = """
-        UPDATE PATIENT_APPOINTMENT
-        SET meal_prescribed = %s, updated_at = CURRENT_TIMESTAMP
-        WHERE appt_id = %s
-    """
-    values = (meal_plan_id, appt_id)
-    cursor.execute(query, values)
-
-    patient_id_query = """
-        SELECT patient_id FROM PATIENT_APPOINTMENT
-        WHERE patient_appt_id = %s"""
-    cursor.execute(patient_id_query, (appt_id,))
-
-    patient_id = cursor.fetchone()
-
-    add_to_patient_plans = """
-        INSERT INTO PATIENT_MEAL_PLAN (patient_id, meal_plan_id)
-        VALUES (%s, %s)
-    """
-    
-    cursor.execute(add_to_patient_plans, (patient_id, meal_plan_id))
     try:
-        mysql.connection.commit()
-        if cursor.rowcount == 0:
-            return jsonify({"error": "No appointment found for this patient."}), 404
+        # Update the appointment
+        update_query = """
+            UPDATE PATIENT_APPOINTMENT
+            SET meal_prescribed = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE patient_appt_id = %s
+        """
+        cursor.execute(update_query, (meal_plan_id, appt_id))
 
+        # Fetch patient_id using consistent column name
+        patient_id_query = """
+            SELECT patient_id FROM PATIENT_APPOINTMENT
+            WHERE patient_appt_id = %s
+        """
+        cursor.execute(patient_id_query, (appt_id,))
+        result = cursor.fetchone()
+
+        if result is None:
+            return jsonify({"error": "No appointment found for this ID."}), 404
+
+        patient_id = result[0]  # Extract value
+
+        # ✅ FIXED: Correct argument order
+        insert_query = """
+            INSERT INTO PATIENT_PLANS (meal_plan_id, user_id, created_at, updated_at)
+            VALUES (%s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """
+        cursor.execute(insert_query, (meal_plan_id, patient_id))  # Corrected order
+
+        mysql.connection.commit()
         return jsonify({"message": "Meal plan assigned successfully."}), 200
 
     except Exception as e:
@@ -874,6 +836,8 @@ def assign_plan_to_patient():
         return jsonify({"error": str(e)}), 400
     finally:
         cursor.close()
+
+
 
 # accepting patients - general
 @doctor_bp.route('/doctor-accepting-status/<int:doctor_id>', methods=['PATCH'])
@@ -1228,7 +1192,8 @@ def get_past_appointments_by_doctor(doctor_id):
         FROM PATIENT_APPOINTMENT pa
         JOIN PATIENT p ON pa.patient_id = p.patient_id
         JOIN MEAL_PLAN mp ON pa.meal_prescribed = mp.meal_plan_id
-        WHERE p.doctor_id = %s AND pa.appointment_datetime < NOW()
+        WHERE p.doctor_id = %s
+        AND (pa.appointment_datetime < NOW() OR pa.appt_status = 2)
         ORDER BY pa.appointment_datetime DESC
     """
 
@@ -1577,3 +1542,73 @@ def get_top_doctors():
         return jsonify({"error": str(e)}), 400
     finally:
         cursor.close()
+@doctor_bp.route('/appt-status/<int:appointment_id>', methods=['PUT'])
+def update_app_status(appointment_id):
+    """
+    Update appointment status
+    ---
+    tags:
+      - Appointment
+    parameters:
+      - name: appointment_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              appt_status:
+                type: integer
+                enum: [0, 1, 2]
+                description: "0 = upcoming, 1 = ongoing, 2 = ended"
+    responses:
+      200:
+        description: Appointment status updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: { type: string }
+                appt_status: { type: integer }
+      400:
+        description: Update error
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: { type: string }
+    """
+    data = request.get_json()
+    appt_status = data.get('appt_status')
+
+    if appt_status is None or appt_status not in [0, 1, 2]:
+        return jsonify({'error': 'Invalid or missing appt_status'}), 400
+
+    cursor = mysql.connection.cursor()
+
+    try:
+        update_query = """
+            UPDATE PATIENT_APPOINTMENT
+            SET appt_status = %s, updated_at = NOW()
+            WHERE patient_appt_id = %s
+        """
+        cursor.execute(update_query, (appt_status, appointment_id))
+        mysql.connection.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'Appointment not found'}), 404
+
+        return jsonify({
+            'message': 'Appointment status updated',
+            'appt_status': appt_status
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400

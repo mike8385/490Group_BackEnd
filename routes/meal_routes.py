@@ -628,41 +628,40 @@ def get_doctor_meal_plans(doctor_id):
 
     cursor = mysql.connection.cursor(DictCursor)
 
-    # Step 1: get user_id of the patient
+    # Step 1: Get the doctor’s user_id from USER table
     cursor.execute("SELECT user_id FROM USER WHERE doctor_id = %s", (doctor_id,))
-    result = cursor.fetchone()
-    if not result:
+    user = cursor.fetchone()
+    if not user:
         return jsonify({"error": "Doctor not found"}), 404
+    user_id = user['user_id']
 
-    user_id = result['user_id']
-
-    # Step 2: query meal plans (created or assigned)
+    # Step 2: Get all meal plans created by OR saved by the doctor
     query = """
-      SELECT DISTINCT
-          mp.meal_plan_id,
-          mp.meal_plan_title AS title,
-          mp.meal_plan_name AS tag,
-          mp.created_at,
-          CASE
-              WHEN d.first_name IS NOT NULL THEN CONCAT('Dr. ', d.first_name, ' ', d.last_name)
-              ELSE CONCAT(p.first_name, ' ', p.last_name)
-          END AS made_by
-      FROM MEAL_PLAN mp
-      JOIN USER u ON mp.made_by = u.user_id
-      LEFT JOIN DOCTOR d ON u.doctor_id = d.doctor_id
-      LEFT JOIN PATIENT p ON u.patient_id = p.patient_id
-      WHERE mp.made_by = %s
-        OR mp.meal_plan_id IN (
-              SELECT meal_plan_id FROM PATIENT_PLANS WHERE user_id = %s
-        )
-      ORDER BY mp.meal_plan_id DESC;
-      """
+        SELECT DISTINCT
+            mp.meal_plan_id,
+            mp.meal_plan_title AS title,
+            mp.meal_plan_name AS tag,
+            mp.created_at,
+            CASE
+                WHEN d.first_name IS NOT NULL THEN CONCAT('Dr. ', d.first_name, ' ', d.last_name)
+                ELSE CONCAT(p.first_name, ' ', p.last_name)
+            END AS made_by
+        FROM MEAL_PLAN mp
+        JOIN USER u ON mp.made_by = u.user_id
+        LEFT JOIN DOCTOR d ON u.doctor_id = d.doctor_id
+        LEFT JOIN PATIENT p ON u.patient_id = p.patient_id
+        WHERE mp.made_by = %s
+           OR mp.meal_plan_id IN (
+               SELECT meal_plan_id FROM PATIENT_PLANS WHERE user_id = %s
+           )
+        ORDER BY mp.meal_plan_id DESC;
+    """
 
     cursor.execute(query, (user_id, user_id))
-    meal_plans = cursor.fetchall()
+    results = cursor.fetchall()
     cursor.close()
 
-    return jsonify(meal_plans), 200
+    return jsonify(results), 200
 
 @meal_bp.route('/clear-meals', methods=['POST'])
 def clear_meals_for_day():

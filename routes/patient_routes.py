@@ -1337,7 +1337,7 @@ def get_past_appointments(patient_id):
             DOCTOR D ON PA.doctor_id = D.doctor_id
         WHERE 
             PA.patient_id = %s 
-            AND (pa.appointment_datetime < NOW() OR pa.appt_status = 2)
+            AND (PA.appointment_datetime < NOW() OR PA.appt_status = 2)
         ORDER BY 
             PA.appointment_datetime DESC;
 
@@ -2230,28 +2230,28 @@ def edit_patient():
     city = data.get('city')
     state = data.get('state') 
     
-    patient_picture_url = None
-    patient_picture = data.get('patient_picture')  # Base64 encoded image data
-    if patient_picture:
-        try:
-            patient_picture = base64.b64decode(patient_picture)
-            filename = f"patients/{data['first_name']}_{data['last_name']}_{int(time.time())}.png"
-            bucket = storage_client.bucket(GCS_BUCKET)
-            blob = bucket.blob(filename)
-            blob.upload_from_string(patient_picture, content_type='image/png')
+    # patient_picture_url = None
+    # patient_picture = data.get('patient_picture')  # Base64 encoded image data
+    # if patient_picture:
+    #     try:
+    #         patient_picture = base64.b64decode(patient_picture)
+    #         filename = f"patients/{data['first_name']}_{data['last_name']}_{int(time.time())}.png"
+    #         bucket = storage_client.bucket(GCS_BUCKET)
+    #         blob = bucket.blob(filename)
+    #         blob.upload_from_string(patient_picture, content_type='image/png')
 
-            patient_picture_url = f"https://storage.googleapis.com/{GCS_BUCKET}/{filename}"
-        except Exception as e:
-            return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
+    #         patient_picture_url = f"https://storage.googleapis.com/{GCS_BUCKET}/{filename}"
+    #     except Exception as e:
+    #         return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
 
     cursor = mysql.connection.cursor()
     try:
         # Update PATIENT table
         cursor.execute("""
             UPDATE PATIENT
-            SET patient_email = %s, first_name = %s, last_name = %s, patient_picture_url = %s
+            SET patient_email = %s, first_name = %s, last_name = %s
             WHERE patient_id = %s
-        """, (patient_email, first, last, patient_id), patient_picture_url)
+        """, (patient_email, first, last, patient_id))
 
         # Update PATIENT_INIT_SURVEY table
         cursor.execute("""
@@ -2346,7 +2346,7 @@ def get_past_appointments_with_doctor(patient_id, doctor_id):
     cursor = mysql.connection.cursor()
 
     query = """
-        SELECT * FROM PATIENT_APPOINTMENT
+        SELECT * FROM PATIENT_APPOINTMENT pa
         WHERE patient_id = %s AND doctor_id = %s
         AND (pa.appointment_datetime < NOW() OR pa.appt_status = 2)
         ORDER BY appointment_datetime DESC

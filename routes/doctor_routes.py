@@ -1416,7 +1416,6 @@ def edit_doctor():
               zipcode: { type: string }
               city: { type: string }
               state: { type: string }
-              doctor_picture: { type: string, description: "Base64-encoded image" }
           example:
             doctor_id: 3
             first_name: "Jane"
@@ -1449,19 +1448,19 @@ def edit_doctor():
     city = data.get('city')
     state = data.get('state')
 
-    doctor_picture_url = None
-    doctor_picture = data.get('doctor_picture')  # Base64 encoded image data
-    if doctor_picture:
-        try:
-            doctor_picture = base64.b64decode(doctor_picture)
-            filename = f"doctors/{data['first_name']}_{data['last_name']}_{int(time.time())}.png"
-            bucket = storage_client.bucket(GCS_BUCKET)
-            blob = bucket.blob(filename)
-            blob.upload_from_string(doctor_picture, content_type='image/png')
+    # doctor_picture_url = None
+    # doctor_picture = data.get('doctor_picture')  # Base64 encoded image data
+    # if doctor_picture:
+    #     try:
+    #         doctor_picture = base64.b64decode(doctor_picture)
+    #         filename = f"doctors/{data['first_name']}_{data['last_name']}_{int(time.time())}.png"
+    #         bucket = storage_client.bucket(GCS_BUCKET)
+    #         blob = bucket.blob(filename)
+    #         blob.upload_from_string(doctor_picture, content_type='image/png')
 
-            doctor_picture_url = f"https://storage.googleapis.com/{GCS_BUCKET}/{filename}"
-        except Exception as e:
-            return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
+    #         doctor_picture_url = f"https://storage.googleapis.com/{GCS_BUCKET}/{filename}"
+    #     except Exception as e:
+    #         return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
 
     cursor = mysql.connection.cursor()
     try:
@@ -1480,13 +1479,12 @@ def edit_doctor():
                 zipcode = %s,
                 city = %s,
                 state = %s,
-                doctor_picture = %s,
                 updated_at = NOW()
             WHERE doctor_id = %s
         """, (
             first_name, last_name, email, description,
             years_of_practice, specialty, payment_fee, gender,
-            phone_number, address, zipcode, city, state, doctor_picture_url, doctor_id
+            phone_number, address, zipcode, city, state, doctor_id
         ))
 
         mysql.connection.commit()

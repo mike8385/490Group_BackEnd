@@ -1,9 +1,17 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 from db import mysql
-import bcrypt
+import bcrypt, base64
+from google.cloud import storage
+import time
+import os
 
 patient_bp = Blueprint('patient_bp', __name__)
+
+credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
+GCS_BUCKET = "image-bucket-490"
+storage_client = storage.Client()
 
 #--------------------REGISTRATION END POINTS------------------------------ 
 # register patient + init survey combined
@@ -91,6 +99,7 @@ def register_patient_with_survey():
     cursor = mysql.connection.cursor()
 
     try:
+        
         # hash the password ---
         password = data['patient_password']
         hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
@@ -112,12 +121,25 @@ def register_patient_with_survey():
             return jsonify({"error": "Pharmacy not found. Please register the pharmacy first."}), 400
         pharmacy_id = pharmacy[0]
 
+        patient_picture_url = None
+        patient_picture = data.get('patient_picture')  # Base64 encoded image data
+        if patient_picture:
+            try:
+                patient_picture = base64.b64decode(patient_picture)
+                filename = f"patients/{data['first_name']}_{data['last_name']}_{int(time.time())}.png"
+                bucket = storage_client.bucket(GCS_BUCKET)
+                blob = bucket.blob(filename)
+                blob.upload_from_string(patient_picture, content_type='image/png')
+
+                patient_picture_url = f"https://storage.googleapis.com/{GCS_BUCKET}/{filename}"
+            except Exception as e:
+                return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
         # Insert patient ---
         insert_patient_query = """
             INSERT INTO PATIENT (
                 patient_email, patient_password, first_name, last_name,
-                pharmacy_id, insurance_provider, insurance_policy_number, insurance_expiration_date
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                pharmacy_id, insurance_provider, insurance_policy_number, insurance_expiration_date, profile_pic
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         patient_values = (
             data['patient_email'],
@@ -127,7 +149,8 @@ def register_patient_with_survey():
             pharmacy_id,
             data.get('insurance_provider'),
             data.get('insurance_policy_number'),
-            data.get('insurance_expiration_date')
+            data.get('insurance_expiration_date'),
+            patient_picture_url
         )
         cursor.execute(insert_patient_query, patient_values)
 
@@ -412,6 +435,7 @@ def init_patient_survey():
         mysql.connection.rollback()
         return jsonify({"error": str(e)}), 400
 
+
 @patient_bp.route('/init-patient-survey/<int:patient_id>', methods=['GET'])
 def get_patient_init_survey(patient_id):
     """
@@ -499,7 +523,8 @@ def get_patient_init_survey(patient_id):
             p.first_name,
             p.last_name,
             pis.favorite_meal,
-            pis.health_goals
+            pis.health_goals,
+            p.profile_pic
         FROM PATIENT as p
         JOIN PATIENT_INIT_SURVEY as pis ON p.patient_id = pis.patient_id
         WHERE p.patient_id = %s
@@ -514,7 +539,7 @@ def get_patient_init_survey(patient_id):
                 'is_id', 'patient_id', 'mobile_number', 'dob', 'gender',
                 'height', 'weight', 'dietary_restrictions', 'blood_type', 'patient_address',
                 'patient_zipcode', 'patient_city', 'patient_state', 'medical_conditions',
-                'family_history', 'past_procedures', 'patient_email', 'first_name', 'last_name', 'favorite_meal', 'health_goals'
+                'family_history', 'past_procedures', 'patient_email', 'first_name', 'last_name', 'favorite_meal', 'health_goals', 'picture'
             ]
             survey_info = dict(zip(keys, result))
             return jsonify(survey_info), 200
@@ -2203,16 +2228,30 @@ def edit_patient():
     address = data.get('address')
     zipcode = data.get('zipcode')
     city = data.get('city')
-    state = data.get('state')  
+    state = data.get('state') 
+    
+    patient_picture_url = None
+    patient_picture = data.get('patient_picture')  # Base64 encoded image data
+    if patient_picture:
+        try:
+            patient_picture = base64.b64decode(patient_picture)
+            filename = f"patients/{data['first_name']}_{data['last_name']}_{int(time.time())}.png"
+            bucket = storage_client.bucket(GCS_BUCKET)
+            blob = bucket.blob(filename)
+            blob.upload_from_string(patient_picture, content_type='image/png')
+
+            patient_picture_url = f"https://storage.googleapis.com/{GCS_BUCKET}/{filename}"
+        except Exception as e:
+            return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
 
     cursor = mysql.connection.cursor()
     try:
         # Update PATIENT table
         cursor.execute("""
             UPDATE PATIENT
-            SET patient_email = %s, first_name = %s, last_name = %s
+            SET patient_email = %s, first_name = %s, last_name = %s, patient_picture_url = %s
             WHERE patient_id = %s
-        """, (patient_email, first, last, patient_id))
+        """, (patient_email, first, last, patient_id), patient_picture_url)
 
         # Update PATIENT_INIT_SURVEY table
         cursor.execute("""

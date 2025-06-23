@@ -1,12 +1,20 @@
 from flask import Blueprint, request, jsonify
-from datetime import datetime
 from db import mysql
-import bcrypt, base64
+import bcrypt
 from google.cloud import storage
-import time
 import os
+from azure.storage.blob import BlobServiceClient, ContentSettings
+import uuid
+from werkzeug.utils import secure_filename
 
 patient_bp = Blueprint('patient_bp', __name__)
+
+AZURE_CONNECTION_STRING = os.getenv("AZURE_CONNECTION_STRING")
+AZURE_CONTAINER_NAME = 'images'
+blob_service_client = BlobServiceClient.from_connection_string(AZURE_CONNECTION_STRING)
+container_client = blob_service_client.get_container_client(AZURE_CONTAINER_NAME)
+
+
 
 credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
@@ -17,94 +25,19 @@ storage_client = storage.Client()
 # register patient + init survey combined
 @patient_bp.route('/register-patient-with-survey', methods=['POST'])
 def register_patient_with_survey():
-    """
-    Register a new patient and initialize survey
+    data = request.form
+    file = request.files.get('patient_picture')  # 🟢 Use correct key!
 
-    ---
-    tags:
-      - Patient
-    requestBody:
-      required: true
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              patient_email:
-                type: string
-              patient_password:
-                type: string
-              first_name:
-                type: string
-              last_name:
-                type: string
-              pharmacy_name:
-                type: string
-              pharmacy_address:
-                type: string
-              pharmacy_zipcode:
-                type: string
-              insurance_provider:
-                type: string
-              insurance_policy_number:
-                type: string
-              insurance_expiration_date:
-                type: string
-                format: date
-              mobile_number:
-                type: string
-              dob:
-                type: string
-                format: date
-              gender:
-                type: string
-                enum: [Male, Female, Other]
-              height:
-                type: number
-                format: float
-              weight:
-                type: number
-                format: float
-              activity:
-                type: number
-                format: float
-              health_goals:
-                type: string
-              dietary_restrictions:
-                type: string
-              blood_type:
-                type: string
-              patient_address:
-                type: string
-              patient_zipcode:
-                type: string
-              patient_city:
-                type: string
-              patient_state:
-                type: string
-              medical_conditions:
-                type: string
-              family_history:
-                type: string
-              past_procedures:
-                type: string
-    responses:
-      201:
-        description: Patient registered successfully
-      400:
-        description: Error occurred during registration
-    """
-
-    data = request.get_json()
-    cursor = mysql.connection.cursor()
+    if not data:
+        return jsonify({"error": "No input data provided"}), 400
 
     try:
-        
-        # hash the password ---
+        cursor = mysql.connection.cursor()
+        # hash password
         password = data['patient_password']
         hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
-        # Get pharmacy ID ---
+        # Find pharmacy
         find_pharmacy_query = """
             SELECT pharmacy_id FROM PHARMACY
             WHERE pharmacy_name = %s AND address = %s AND zipcode = %s
@@ -121,20 +54,24 @@ def register_patient_with_survey():
             return jsonify({"error": "Pharmacy not found. Please register the pharmacy first."}), 400
         pharmacy_id = pharmacy[0]
 
+        # Upload patient picture to Azure Blob (same as doctor!)
         patient_picture_url = None
-        patient_picture = data.get('patient_picture')  # Base64 encoded image data
-        if patient_picture:
+        if file:
             try:
-                patient_picture = base64.b64decode(patient_picture)
-                filename = f"patients/{data['first_name']}_{data['last_name']}_{int(time.time())}.png"
-                bucket = storage_client.bucket(GCS_BUCKET)
-                blob = bucket.blob(filename)
-                blob.upload_from_string(patient_picture, content_type='image/png')
+                filename = f"patient_{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+                blob_client = container_client.get_blob_client(filename)
 
-                patient_picture_url = f"https://storage.googleapis.com/{GCS_BUCKET}/{filename}"
+                blob_client.upload_blob(
+                    file,
+                    content_settings=ContentSettings(content_type=file.content_type)
+                )
+
+                patient_picture_url = f"https://dppimages.blob.core.windows.net/{AZURE_CONTAINER_NAME}/{filename}"
+
             except Exception as e:
                 return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
-        # Insert patient ---
+
+        # Insert patient
         insert_patient_query = """
             INSERT INTO PATIENT (
                 patient_email, patient_password, first_name, last_name,
@@ -154,10 +91,10 @@ def register_patient_with_survey():
         )
         cursor.execute(insert_patient_query, patient_values)
 
-        # Get the newly inserted patient's ID
+        # Get patient_id
         patient_id = cursor.lastrowid
 
-        # Insert initial survey ---
+        # Insert survey
         insert_survey_query = """
             INSERT INTO PATIENT_INIT_SURVEY (
                 patient_id,
@@ -200,13 +137,14 @@ def register_patient_with_survey():
         )
         cursor.execute(insert_survey_query, survey_values)
 
-        # Commit transaction ---
+        # Commit transaction
         mysql.connection.commit()
         return jsonify({"message": "Patient registered successfully!"}), 201
 
     except Exception as e:
         mysql.connection.rollback()
         return jsonify({"error": str(e)}), 400
+
 
 @patient_bp.route('/patient/<int:patient_id>', methods=['GET'])
 def get_patient(patient_id):

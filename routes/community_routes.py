@@ -11,9 +11,10 @@ comm_bp = Blueprint('comm_bp', __name__)
 
 AZURE_CONNECTION_STRING = os.getenv("AZURE_CONNECTION_STRING")
 AZURE_CONTAINER_NAME = 'images'
-
-blob_service_client = BlobServiceClient.from_connection_string(AZURE_CONNECTION_STRING)
-container_client = blob_service_client.get_container_client(AZURE_CONTAINER_NAME)
+blob_service_client = None
+if AZURE_CONNECTION_STRING:
+  blob_service_client = BlobServiceClient.from_connection_string(AZURE_CONNECTION_STRING)
+  container_client = blob_service_client.get_container_client(AZURE_CONTAINER_NAME)
 # get a post by post_id
 @comm_bp.route('/posts/<int:post_id>', methods=['GET'])
 def get_posts(post_id):

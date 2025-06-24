@@ -1,17 +1,20 @@
 from flask import Blueprint, request, jsonify
+from azure.storage.blob import BlobServiceClient
 from db import mysql
-import bcrypt, base64
 import os
-from google.cloud import storage
 import time
+from werkzeug.utils import secure_filename
 
 comm_bp = Blueprint('comm_bp', __name__)
 
-credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
-GCS_BUCKET = "image-bucket-490"
-storage_client = storage.Client()
 
+
+AZURE_CONNECTION_STRING = os.getenv("AZURE_CONNECTION_STRING")
+AZURE_CONTAINER_NAME = 'images'
+blob_service_client = None
+if AZURE_CONNECTION_STRING:
+  blob_service_client = BlobServiceClient.from_connection_string(AZURE_CONNECTION_STRING)
+  container_client = blob_service_client.get_container_client(AZURE_CONTAINER_NAME)
 # get a post by post_id
 @comm_bp.route('/posts/<int:post_id>', methods=['GET'])
 def get_posts(post_id):
@@ -103,7 +106,48 @@ def get_posts(post_id):
         "comment_count": comment_count
     }
     return jsonify(result), 200
+#convert image
+@comm_bp.route('/upload-image', methods=['POST'])
+def upload_image():
+    """
+    Upload image to Azure Blob Storage
+    ---
+    tags:
+      - Upload
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            properties:
+              image:
+                type: string
+                format: binary
+    responses:
+      200:
+        description: Image uploaded
+      400:
+        description: Upload failed
+    """
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image file provided'}), 400
 
+    image_file = request.files['image']
+    if image_file.filename == '':
+        return jsonify({'error': 'Empty filename'}), 400
+
+    try:
+        filename = secure_filename(image_file.filename)
+        unique_filename = f"{int(time.time())}_{filename}"
+        blob_client = container_client.get_blob_client(unique_filename)
+        blob_client.upload_blob(image_file, overwrite=True)
+
+        image_url = f"https://{blob_client.account_name}.blob.core.windows.net/{AZURE_CONTAINER_NAME}/{unique_filename}"
+        return jsonify({'url': image_url}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 # get post by the creator's id
 @comm_bp.route('/posts/user/<int:user_id>', methods=['GET'])
 def get_posts_by_user(user_id):
@@ -336,19 +380,29 @@ def add_post():
               - user_id
               - description
               - picture
+              - meal_name
+              - meal_calories
+              - add_tag
             properties:
               user_id:
                 type: integer
-              meal_id:
+              meal_name:
+                type: string
+              meal_calories:
                 type: integer
               description:
                 type: string
               picture:
                 type: string
+              add_tag:
+                type: string
             example:
               user_id: 1
-              meal_id: 5
-              description: "Amazing dish with lots of protein!"
+              meal_name: "Protein Salad"
+              meal_calories: 400
+              description: "Tasty and healthy!"
+              picture: "https://<your-azure-url>.blob.core.windows.net/images/protein_salad_1_123456.png"
+              add_tag: "Vegan"
     responses:
       201:
         description: Post added successfully
@@ -356,27 +410,17 @@ def add_post():
         description: Input error or database failure
     """
     data = request.get_json()
+
     user_id = data.get('user_id')
     meal_name = data.get('meal_name')
     meal_calories = data.get('meal_calories')
     description = data.get('description')
-    # picture = data.get('picture')
+    meal_picture_url = data.get('picture')  # <-- Now it's already a URL
     add_tag = data.get('add_tag')
 
-    meal_picture_url = None
-    picture = data.get('picture')  # Base64 encoded image data
-    if picture:
-        try:
-            picture = base64.b64decode(picture)
-            meal_name_formatted = meal_name.replace(" ", "_")
-            filename = f"meals/{meal_name_formatted}_{data['user_id']}_{int(time.time())}.png"
-            bucket = storage_client.bucket(GCS_BUCKET)
-            blob = bucket.blob(filename)
-            blob.upload_from_string(picture, content_type='image/png')
+    if not all([user_id, meal_name, meal_calories, description, meal_picture_url, add_tag]):
+        return jsonify({"error": "Missing required fields"}), 400
 
-            meal_picture_url = f"https://storage.googleapis.com/{GCS_BUCKET}/{filename}"
-        except Exception as e:
-            return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
     cursor = mysql.connection.cursor()
 
     try:

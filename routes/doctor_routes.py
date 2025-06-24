@@ -1,5 +1,8 @@
 from flask import Blueprint, request, jsonify
 from rabbitmq_utils import send_medication_request
+from azure.storage.blob import BlobServiceClient, ContentSettings
+from werkzeug.utils import secure_filename
+import uuid
 from db import mysql
 import bcrypt, base64
 from google.cloud import storage
@@ -13,112 +16,22 @@ os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
 GCS_BUCKET = "image-bucket-490"
 storage_client = storage.Client()
 
+AZURE_CONNECTION_STRING = os.getenv("AZURE_CONNECTION_STRING")
+AZURE_CONTAINER_NAME = 'images'
+
+blob_service_client = None
+if AZURE_CONNECTION_STRING:
+  blob_service_client = BlobServiceClient.from_connection_string(AZURE_CONNECTION_STRING)
+  container_client = blob_service_client.get_container_client(AZURE_CONTAINER_NAME)
+
 @doctor_bp.route('/register-doctor', methods=['POST'])
 def register_doctor():
-    """
-    Register a new doctor
-    ---
-    tags:
-      - Doctor
-    requestBody:
-      required: true
-      content:
-        application/json:
-          schema:
-            type: object
-            required:
-              - first_name
-              - last_name
-              - email
-              - password
-              - license_num
-              - license_exp_date
-              - dob
-              - med_school
-              - years_of_practice
-              - specialty
-              - payment_fee
-              - gender
-              - phone_number
-              - address
-              - zipcode
-              - city
-              - state
-            properties:
-              first_name:
-                type: string
-              last_name:
-                type: string
-              email:
-                type: string
-              password:
-                type: string
-              description:
-                type: string
-              license_num:
-                type: string
-              license_exp_date:
-                type: string
-                format: date
-              dob:
-                type: string
-                format: date
-              med_school:
-                type: string
-              years_of_practice:
-                type: integer
-              specialty:
-                type: string
-              payment_fee:
-                type: number
-              gender:
-                type: string
-              phone_number:
-                type: string
-              address:
-                type: string
-              zipcode:
-                type: string
-              city:
-                type: string
-              state:
-                type: string
-              doctor_picture:
-                type: string
-                description: Base64 encoded image string
-          example:
-            first_name: "Jane"
-            last_name: "Smith"
-            email: "jane.smith@example.com"
-            password: "securepass123"
-            license_num: "LIC2024123"
-            license_exp_date: "2026-01-01"
-            dob: "1982-05-12"
-            med_school: "Stanford School of Medicine"
-            years_of_practice: 12
-            specialty: "Pediatrics"
-            payment_fee: 120.0
-            gender: "Female"
-            phone_number: "555-123-4567"
-            address: "123 Wellness Way"
-            zipcode: "94043"
-            city: "Mountain View"
-            state: "CA"
-            doctor_picture: "https://storage.googleapis.com/doctors/file"
-    responses:
-      201:
-        description: Doctor registered successfully!
-      400:
-        description: Validation error or image upload failure
-      500:
-        description: Server/database error
-    """
-    data = request.get_json()
+    data = request.form
+    file = request.files.get('doctor_picture')
 
     if not data:
         return jsonify({"error": "No input data provided"}), 400
 
-    # Validate required fields
     required_fields = [
         'first_name', 'last_name', 'email', 'password', 'license_num',
         'license_exp_date', 'dob', 'med_school', 'years_of_practice',
@@ -129,21 +42,26 @@ def register_doctor():
     if missing_fields:
         return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
 
-    # Hash the password
-    password = data.get('password')
-    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+    hashed_password = bcrypt.hashpw(data.get('password').encode('utf-8'), bcrypt.gensalt())
 
     doctor_picture_url = None
-    doctor_picture = data.get('doctor_picture')  # Base64 encoded image data
-    if doctor_picture:
+    print("File")
+    if file:
+        print("IT DOES")
         try:
-            doctor_picture = base64.b64decode(doctor_picture)
-            filename = f"doctors/{data['first_name']}_{data['last_name']}_{int(time.time())}.png"
-            bucket = storage_client.bucket(GCS_BUCKET)
-            blob = bucket.blob(filename)
-            blob.upload_from_string(doctor_picture, content_type='image/png')
+            print("we here")
+            filename = f"doctor_{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+            print(filename)
+            blob_client = container_client.get_blob_client(filename)
 
-            doctor_picture_url = f"https://storage.googleapis.com/{GCS_BUCKET}/{filename}"
+            blob_client.upload_blob(
+                file,
+                content_settings=ContentSettings(content_type=file.content_type)
+            )
+
+            # Public URL (depends if your container is public, otherwise you'll need to generate SAS token)
+            doctor_picture_url = f"https://dppimages.blob.core.windows.net/{AZURE_CONTAINER_NAME}/{filename}"
+
         except Exception as e:
             return jsonify({"error": f"Failed to upload image: {str(e)}"}), 400
 
@@ -173,7 +91,7 @@ def register_doctor():
         data['zipcode'],
         data['city'],
         data['state'],
-        doctor_picture_url  # or doctor_picture_url if using GCS
+        doctor_picture_url
     )
 
     try:
